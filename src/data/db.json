@@ -1,0 +1,28 @@
+{
+  "users": {
+    "priya@demo.local": {
+      "id": "priya@demo.local",
+      "email": "priya@demo.local",
+      "adminCommunityCode": "maple-hill"
+    },
+    "mira@demo.local": {
+      "id": "mira@demo.local",
+      "email": "mira@demo.local",
+      "adminCommunityCode": "citrus-park"
+    }
+  },
+  "communities": {
+    "maple-hill": {
+      "code": "maple-hill",
+      "name": "Maple Hill",
+      "content": "## Welcome to Maple Hill\n\n**Quick links**\n- Group chat: \"Maple Hill Neighbors\" (Signal)\n- Events calendar: First Sunday potluck\n- Emergency info: Call 311 for city services\n\n**Organizers**\n- Priya: street cleanups\n- Evan: gardening club\n\nShare a note: add updates in the community thread.",
+      "admins": ["priya@demo.local"]
+    },
+    "citrus-park": {
+      "code": "citrus-park",
+      "name": "Citrus Park",
+      "content": "## Citrus Park Hub\n\n**Links**\n- WhatsApp: \"Citrus Park Crew\"\n- Tool library signout: ask neighbors on 5th Ave\n\n**Upcoming**\n- 2/15: Park cleanup at 9am\n- 2/22: Board game night\n\nReach out to Mira if you want to help host events.",
+      "admins": ["mira@demo.local"]
+    }
+  }
+}
