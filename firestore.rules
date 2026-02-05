@@ -2,13 +2,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /communities/{communityId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if false;
       allow create: if request.auth != null
         && request.resource.data.code == communityId
         && request.resource.data.admins is list
         && request.auth.token.email in request.resource.data.admins;
       allow update, delete: if request.auth != null
-        && request.auth.token.email in resource.data.admins;
+        && request.auth.token.email in resource.data.admins
+        && request.resource.data.code == resource.data.code;
     }
 
     match /users/{userId} {

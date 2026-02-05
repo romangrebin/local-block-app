@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toCommunitySlug, useAppState } from "../state/AppState";
 
@@ -14,10 +14,16 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     signedIn,
     adminCommunityCode,
     getCommunity,
-    communitiesLoaded,
+    subscribeCommunity,
+    isCommunityLoaded,
     firebaseEnabled,
   } = useAppState();
   const adminCommunity = adminCommunityCode ? getCommunity(adminCommunityCode) : null;
+
+  useEffect(() => {
+    if (!adminCommunityCode) return;
+    return subscribeCommunity(adminCommunityCode);
+  }, [adminCommunityCode, subscribeCommunity]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -35,7 +41,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
       );
     }
 
-    if (!communitiesLoaded) {
+    if (adminCommunityCode && !isCommunityLoaded(adminCommunityCode)) {
       return (
         <button className="button ghost" type="button" disabled>
           Loading your community...

@@ -94,6 +94,9 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
           <span className="helper-text">
             Your neighbors will need this code to visit the private landing page.
           </span>
+          <span className="helper-text">
+            Use 8+ characters to make codes harder to guess.
+          </span>
           {sanitizedCode && sanitizedCode !== code ? (
             <span className="helper-text">
               Only lowercase letters, numbers, and hyphens allowed. Use{" "}

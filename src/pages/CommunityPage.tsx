@@ -27,11 +27,17 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     getCommunityContent,
     getCommunity,
     isAdminFor,
-    communitiesLoaded,
+    subscribeCommunity,
+    isCommunityLoaded,
   } = useAppState();
 
   const [showManage, setShowManage] = useState(openManageOnLoad);
   const community = getCommunity(communityCode);
+  const communityLoaded = isCommunityLoaded(communityCode);
+
+  useEffect(() => {
+    return subscribeCommunity(communityCode);
+  }, [communityCode, subscribeCommunity]);
 
   const handleManageOpen = () => {
     setShowManage(true);
@@ -48,7 +54,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     navigate("/", { replace: true });
   };
 
-  if (!community && !communitiesLoaded) {
+  if (!community && !communityLoaded) {
     return (
       <div className="page">
         <div className="card">
