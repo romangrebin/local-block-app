@@ -1,41 +1,21 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import {
-  arrayUnion,
-  deleteDoc,
-  doc,
-  getDoc,
-  onSnapshot,
-  serverTimestamp,
-  updateDoc,
-  setDoc,
-} from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-} from "firebase/auth";
-import { Community, StoreData, User } from "../data/models";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Community, StoreData } from "../data/models";
+import { normalizeCode, nameFromEmail } from "../data/normalize";
+import { CreateCommunityInput, SignInInput } from "../data/types";
 import { loadStore, saveStore } from "../data/store";
 import {
-  connectEmulators,
-  getFirebaseAuth,
-  getFirebaseDb,
   isFirebaseConfigured,
   isFirebaseEnabled,
 } from "../data/firebase";
-
-const normalizeCode = (code: string) => code.trim().toLowerCase();
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const nameFromEmail = (email: string) => email.split("@")[0] || "Neighbor";
-
-export type AuthMode = "signin" | "signup";
-
-export type SignInInput = {
-  email: string;
-  password: string;
-  mode: AuthMode;
-};
+import { createFirebaseClient, createLocalClient } from "../data/client";
 
 type AppState = {
   signedIn: boolean;
@@ -47,10 +27,11 @@ type AppState = {
   isCommunityLoaded: (code: string) => boolean;
   signIn: (input: SignInInput) => Promise<string | null>;
   signOut: () => Promise<void>;
-  createCommunity: (input: { code: string; name: string; content?: string }) => Promise<string | null>;
+  createCommunity: (input: CreateCommunityInput) => Promise<string | null>;
   updateCommunity: (code: string, patch: Partial<Community>) => Promise<void>;
   deleteCommunity: (code: string) => Promise<void>;
-  addAdmin: (code: string, admin: string) => Promise<void>;
+  addAdmin: (code: string, admin: string) => Promise<string | null>;
+  getCommunityAdmins: (code: string) => string[];
   getCommunityContent: (code: string) => string;
   getCommunity: (code: string) => Community | null;
   isAdminFor: (code: string) => boolean;
@@ -61,7 +42,10 @@ const AppStateContext = createContext<AppState | null>(null);
 const emptyStore: StoreData = {
   users: {},
   communities: {},
+  communityAdmins: {},
 };
+
+type CommunityStatus = "idle" | "loading" | "loaded" | "missing";
 
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const firebaseEnabled = isFirebaseEnabled() && isFirebaseConfigured();
@@ -69,370 +53,202 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     firebaseEnabled ? emptyStore : loadStore()
   );
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [communityStatus, setCommunityStatus] = useState<Record<string, boolean>>({});
+  const [communityStatus, setCommunityStatus] = useState<Record<string, CommunityStatus>>({});
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
+  const communityAdmins = store.communityAdmins;
   const signedIn = firebaseEnabled ? Boolean(currentUserId) : Boolean(currentUserId && currentUser);
   const userName = currentUser?.email ? nameFromEmail(currentUser.email) : "Neighbor";
-  const adminCommunityCode = currentUser?.adminCommunityCode ?? null;
+  const adminCommunityCode = currentUserId
+    ? communityAdmins[currentUserId]?.communityCode ?? null
+    : null;
 
-  const updateStore = (updater: (prev: StoreData) => StoreData) => {
-    setStore((prev) => {
-      const next = updater(prev);
-      if (!firebaseEnabled && next !== prev) {
-        saveStore(next);
-      }
-      return next;
-    });
-  };
-
-  const ensureUserDoc = async (userId: string, email: string) => {
-    const db = getFirebaseDb();
-    const userRef = doc(db, "users", userId);
-    const snapshot = await getDoc(userRef);
-    if (!snapshot.exists()) {
-      await setDoc(userRef, {
-        email,
-        adminCommunityCode: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+  const updateStore = useCallback(
+    (updater: (prev: StoreData) => StoreData) => {
+      setStore((prev) => {
+        const next = updater(prev);
+        if (!firebaseEnabled && next !== prev) {
+          saveStore(next);
+        }
+        return next;
       });
-    }
-  };
+    },
+    [firebaseEnabled]
+  );
+
+  const storeRef = useRef(store);
+  useEffect(() => {
+    storeRef.current = store;
+  }, [store]);
+
+  const getStore = useCallback(() => storeRef.current, []);
+
+  const dataClient = useMemo(
+    () =>
+      firebaseEnabled
+        ? createFirebaseClient()
+        : createLocalClient({ getStore, updateStore }),
+    [firebaseEnabled, getStore, updateStore]
+  );
 
   useEffect(() => {
-    if (!firebaseEnabled) return;
-    connectEmulators();
-
-    const auth = getFirebaseAuth();
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUserId(user.uid);
-      } else {
-        setCurrentUserId(null);
-      }
+    dataClient.connect();
+    if (!dataClient.onAuthStateChanged) return;
+    const unsubscribe = dataClient.onAuthStateChanged((userId) => {
+      setCurrentUserId(userId);
     });
-
     return () => {
-      unsubscribeAuth();
+      if (unsubscribe) unsubscribe();
     };
-  }, [firebaseEnabled]);
+  }, [dataClient]);
 
   useEffect(() => {
-    if (!firebaseEnabled || !currentUserId) return;
-    const db = getFirebaseDb();
-    const userRef = doc(db, "users", currentUserId);
-    const unsubscribe = onSnapshot(userRef, (snapshot) => {
-      if (!snapshot.exists()) return;
-      const data = snapshot.data() as Omit<User, "id">;
+    if (!currentUserId) return;
+    if (dataClient.kind !== "firebase" || !dataClient.subscribeUser) return;
+    return dataClient.subscribeUser(currentUserId, (user) => {
+      if (!user) return;
       updateStore((prev) => ({
         ...prev,
         users: {
           ...prev.users,
-          [currentUserId]: {
-            id: currentUserId,
-            email: data.email ?? "",
-            adminCommunityCode: data.adminCommunityCode ?? null,
-          },
+          [currentUserId]: user,
         },
       }));
     });
+  }, [currentUserId, dataClient, updateStore]);
 
-    return () => unsubscribe();
-  }, [firebaseEnabled, currentUserId]);
-
-  const subscribeCommunity = (code: string) => {
-    const key = normalizeCode(code);
-    if (!key) return () => {};
-    setCommunityStatus((prev) => ({ ...prev, [key]: false }));
-
-    if (!firebaseEnabled) {
-      setCommunityStatus((prev) => ({ ...prev, [key]: true }));
-      return () => {};
-    }
-
-    const db = getFirebaseDb();
-    const ref = doc(db, "communities", key);
-    const unsubscribe = onSnapshot(ref, (snapshot) => {
+  useEffect(() => {
+    if (!currentUserId || !dataClient.subscribeAdminLink) return;
+    return dataClient.subscribeAdminLink(currentUserId, (adminLink) => {
       updateStore((prev) => {
-        const nextCommunities = { ...prev.communities };
-        if (snapshot.exists()) {
-          const data = snapshot.data() as Community;
-          nextCommunities[key] = {
-            code: data.code,
-            name: data.name,
-            content: data.content,
-            admins: data.admins ?? [],
-          };
+        const nextAdmins = { ...prev.communityAdmins };
+        if (adminLink) {
+          nextAdmins[currentUserId] = adminLink;
         } else {
-          delete nextCommunities[key];
+          delete nextAdmins[currentUserId];
         }
         return {
           ...prev,
-          communities: nextCommunities,
+          communityAdmins: nextAdmins,
         };
       });
-      setCommunityStatus((prev) => ({ ...prev, [key]: true }));
     });
+  }, [currentUserId, dataClient, updateStore]);
 
-    return () => {
-      unsubscribe();
-    };
-  };
+  const subscribeCommunity = useCallback(
+    (code: string) => {
+      const key = normalizeCode(code);
+      if (!key) return () => {};
+      setCommunityStatus((prev) => ({ ...prev, [key]: "loading" }));
 
-  const isCommunityLoaded = (code: string) => {
-    const key = normalizeCode(code);
-    if (!key) return false;
-    return communityStatus[key] ?? false;
-  };
+      const unsubscribeCommunity = dataClient.subscribeCommunity(key, (community) => {
+        if (dataClient.kind === "firebase") {
+          updateStore((prev) => {
+            const nextCommunities = { ...prev.communities };
+            if (community) {
+              nextCommunities[key] = community;
+            } else {
+              delete nextCommunities[key];
+            }
+            return {
+              ...prev,
+              communities: nextCommunities,
+            };
+          });
+        }
+        setCommunityStatus((prev) => ({
+          ...prev,
+          [key]: community ? "loaded" : "missing",
+        }));
+      });
+
+      const shouldLoadAdmins =
+        dataClient.kind === "local" || adminCommunityCode === key;
+      const unsubscribeAdmins = shouldLoadAdmins
+        ? dataClient.subscribeCommunityAdmins(key, (admins) => {
+            updateStore((prev) => {
+              const nextAdmins = { ...prev.communityAdmins };
+              Object.values(nextAdmins).forEach((admin) => {
+                if (admin.communityCode === key) {
+                  delete nextAdmins[admin.userId];
+                }
+              });
+              admins.forEach((admin) => {
+                nextAdmins[admin.userId] = admin;
+              });
+              return {
+                ...prev,
+                communityAdmins: nextAdmins,
+              };
+            });
+          })
+        : () => {};
+
+      return () => {
+        unsubscribeCommunity();
+        unsubscribeAdmins();
+      };
+    },
+    [adminCommunityCode, dataClient, updateStore]
+  );
+
+  const isCommunityLoaded = useCallback(
+    (code: string) => {
+      const key = normalizeCode(code);
+      if (!key) return false;
+      const status = communityStatus[key];
+      return status === "loaded" || status === "missing";
+    },
+    [communityStatus]
+  );
 
   const signIn = async (input: SignInInput) => {
-    const email = normalizeEmail(input.email);
-    if (!email) return "Email is required.";
-    if (!input.password) return "Password is required.";
-
-    if (!firebaseEnabled) {
-      updateStore((prev) => {
-        const existing = prev.users[email];
-        const nextUser: User = {
-          id: email,
-          email,
-          adminCommunityCode: existing?.adminCommunityCode ?? null,
-        };
-        return {
-          ...prev,
-          users: {
-            ...prev.users,
-            [email]: nextUser,
-          },
-        };
-      });
-      setCurrentUserId(email);
-      return null;
+    const result = await dataClient.signIn(input);
+    if (result.error) return result.error;
+    if (result.userId) {
+      setCurrentUserId(result.userId);
     }
-
-    const auth = getFirebaseAuth();
-    try {
-      if (input.mode === "signup") {
-        const result = await createUserWithEmailAndPassword(auth, email, input.password);
-        await ensureUserDoc(result.user.uid, email);
-      } else {
-        const result = await signInWithEmailAndPassword(auth, email, input.password);
-        await ensureUserDoc(result.user.uid, email);
-      }
-      return null;
-    } catch (error) {
-      return "Unable to sign in. Double-check your credentials.";
-    }
+    return null;
   };
 
   const signOut = async () => {
-    if (!firebaseEnabled) {
+    await dataClient.signOut();
+    if (dataClient.kind === "local") {
       setCurrentUserId(null);
-      return;
     }
-    await firebaseSignOut(getFirebaseAuth());
   };
 
-  const createCommunity = async (input: { code: string; name: string; content?: string }) => {
-    const code = normalizeCode(input.code);
-    if (!code || !currentUserId) return null;
-
-    if (!firebaseEnabled) {
-      if (store.communities[code]) return null;
-      const current = store.users[currentUserId];
-      if (!current || current.adminCommunityCode) return null;
-      let created = false;
-
-      updateStore((prev) => {
-        if (prev.communities[code]) return prev;
-        const current = prev.users[currentUserId];
-        if (!current || current.adminCommunityCode) return prev;
-        created = true;
-
-        const nextCommunity: Community = {
-          code,
-          name: input.name.trim() || "New Community",
-          content:
-            input.content?.trim() ||
-            "## New Community\n\nAdd links, event info, and organizers here.",
-          admins: [current.email],
-        };
-
-        const nextUser: User = {
-          ...current,
-          adminCommunityCode: code,
-        };
-
-        return {
-          ...prev,
-          communities: {
-            ...prev.communities,
-            [code]: nextCommunity,
-          },
-          users: {
-            ...prev.users,
-            [currentUserId]: nextUser,
-          },
-        };
-      });
-
-      return created ? code : null;
-    }
-
-    const db = getFirebaseDb();
-    const communityRef = doc(db, "communities", code);
-    const communitySnap = await getDoc(communityRef);
-    if (communitySnap.exists()) return null;
-
-    const userRef = doc(db, "users", currentUserId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return null;
-    const userData = userSnap.data() as User;
-    const userEmail = userData.email ?? "";
-    if (!userEmail) return null;
-
-    if (userData.adminCommunityCode) return null;
-
-    const nextCommunity: Community = {
-      code,
-      name: input.name.trim() || "New Community",
-      content:
-        input.content?.trim() ||
-        "## New Community\n\nAdd links, event info, and organizers here.",
-      admins: [userEmail],
-    };
-
-    await setDoc(communityRef, {
-      ...nextCommunity,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+  const createCommunity = async (input: CreateCommunityInput) => {
+    if (!currentUserId) return null;
+    if (adminCommunityCode) return null;
+    const result = await dataClient.createCommunity({
+      ...input,
+      currentUserId,
     });
-
-    await updateDoc(userRef, {
-      adminCommunityCode: code,
-      updatedAt: serverTimestamp(),
-    });
-
-    return code;
+    return result.code ?? null;
   };
 
   const updateCommunity = async (code: string, patch: Partial<Community>) => {
-    const key = normalizeCode(code);
-    if (!firebaseEnabled) {
-      updateStore((prev) => {
-        const current = prev.communities[key];
-        if (!current) return prev;
-        return {
-          ...prev,
-          communities: {
-            ...prev.communities,
-            [key]: {
-              ...current,
-              ...patch,
-            },
-          },
-        };
-      });
-      return;
-    }
-
-    const db = getFirebaseDb();
-    await updateDoc(doc(db, "communities", key), {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
+    await dataClient.updateCommunity(code, patch);
   };
 
   const deleteCommunity = async (code: string) => {
-    const key = normalizeCode(code);
-    if (!firebaseEnabled) {
-      updateStore((prev) => {
-        if (!prev.communities[key]) return prev;
-        const nextCommunities = { ...prev.communities };
-        delete nextCommunities[key];
-
-        const nextUsers: Record<string, User> = {};
-        Object.entries(prev.users).forEach(([id, user]) => {
-          if (user.adminCommunityCode === key) {
-            nextUsers[id] = { ...user, adminCommunityCode: null };
-          } else {
-            nextUsers[id] = user;
-          }
-        });
-
-        return {
-          ...prev,
-          communities: nextCommunities,
-          users: nextUsers,
-        };
-      });
-      return;
-    }
-
-    const db = getFirebaseDb();
-    await deleteDoc(doc(db, "communities", key));
-
-    if (currentUserId) {
-      await updateDoc(doc(db, "users", currentUserId), {
-        adminCommunityCode: null,
-        updatedAt: serverTimestamp(),
-      });
-    }
+    await dataClient.deleteCommunity(code, currentUserId ?? undefined);
   };
 
   const addAdmin = async (code: string, admin: string) => {
+    const result = await dataClient.addAdmin(code, admin);
+    return result.ok ? null : result.error ?? "Unable to add admin.";
+  };
+
+  const getCommunityAdmins = (code: string) => {
     const key = normalizeCode(code);
-    const adminId = normalizeEmail(admin);
-    if (!adminId) return;
-
-    if (!firebaseEnabled) {
-      updateStore((prev) => {
-        const current = prev.communities[key];
-        if (!current) return prev;
-        if (current.admins.includes(adminId)) return prev;
-
-        const existing = prev.users[adminId];
-        if (existing?.adminCommunityCode && existing.adminCommunityCode !== key) {
-          return prev;
-        }
-
-        const nextUser: User = existing ?? {
-          id: adminId,
-          email: adminId,
-          adminCommunityCode: null,
-        };
-
-        const updatedUser = {
-          ...nextUser,
-          adminCommunityCode: nextUser.adminCommunityCode ?? key,
-        };
-
-        return {
-          ...prev,
-          communities: {
-            ...prev.communities,
-            [key]: {
-              ...current,
-              admins: [...current.admins, adminId],
-            },
-          },
-          users: {
-            ...prev.users,
-            [adminId]: updatedUser,
-          },
-        };
-      });
-      return;
-    }
-
-    const db = getFirebaseDb();
-    await updateDoc(doc(db, "communities", key), {
-      admins: arrayUnion(adminId),
-      updatedAt: serverTimestamp(),
-    });
+    if (!key) return [];
+    return Object.values(communityAdmins)
+      .filter((admin) => admin.communityCode === key)
+      .map((admin) => admin.email)
+      .sort();
   };
 
   const getCommunityContent = (code: string) => {
@@ -450,44 +266,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const isAdminFor = (code: string) => {
     const key = normalizeCode(code);
-    if (currentUser?.email && communities[key]) {
-      return communities[key].admins.includes(currentUser.email);
-    }
     return key === adminCommunityCode;
   };
 
-  const value = useMemo<AppState>(
-    () => ({
-      signedIn,
-      userName,
-      adminCommunityCode,
-      communities,
-      firebaseEnabled,
-      subscribeCommunity,
-      isCommunityLoaded,
-      signIn,
-      signOut,
-      createCommunity,
-      updateCommunity,
-      deleteCommunity,
-      addAdmin,
-      getCommunityContent,
-      getCommunity,
-      isAdminFor,
-    }),
-    [
-      signedIn,
-      userName,
-      adminCommunityCode,
-      communities,
-      firebaseEnabled,
-      communityStatus,
-      subscribeCommunity,
-      isCommunityLoaded,
-    ]
+  return (
+    <AppStateContext.Provider
+      value={{
+        signedIn,
+        userName,
+        adminCommunityCode,
+        communities,
+        firebaseEnabled,
+        subscribeCommunity,
+        isCommunityLoaded,
+        signIn,
+        signOut,
+        createCommunity,
+        updateCommunity,
+        deleteCommunity,
+        addAdmin,
+        getCommunityAdmins,
+        getCommunityContent,
+        getCommunity,
+        isAdminFor,
+      }}
+    >
+      {children}
+    </AppStateContext.Provider>
   );
-
-  return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
 
 export const useAppState = () => {
@@ -497,10 +303,3 @@ export const useAppState = () => {
   }
   return context;
 };
-
-export const toCommunitySlug = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");

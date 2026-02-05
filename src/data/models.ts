@@ -2,7 +2,6 @@ export type Community = {
   code: string;
   name: string;
   content: string;
-  admins: string[];
 };
 
 export type User = {
@@ -11,7 +10,14 @@ export type User = {
   adminCommunityCode: string | null;
 };
 
+export type CommunityAdmin = {
+  userId: string;
+  communityCode: string;
+  email: string;
+};
+
 export type StoreData = {
   users: Record<string, User>;
   communities: Record<string, Community>;
+  communityAdmins: Record<string, CommunityAdmin>;
 };

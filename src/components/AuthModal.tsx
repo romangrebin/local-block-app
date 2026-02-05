@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal } from "./Modal";
-import { AuthMode, useAppState } from "../state/AppState";
+import { useAppState } from "../state/AppState";
+import { AuthMode } from "../data/types";
 
 type AuthModalProps = {
   isOpen: boolean;
