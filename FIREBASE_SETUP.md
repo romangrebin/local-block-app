@@ -42,11 +42,16 @@ If `VITE_USE_FIREBASE` is `false`, the app falls back to the local JSON seed dat
 ## Seed Demo Communities
 1. Create a Firebase service account JSON and store it locally (not in git).
    - Suggested path: `.secrets/firebase-service-account.json`
+   - This is required for admin access; your client `.env.local` values are not sufficient.
 2. Run:
    ```
    npm run seed:firebase
    ```
    This reads `src/data/db.json` and upserts communities into Firestore.
+
+## Privacy & Discovery
+- Firestore rules block list queries so communities cannot be enumerated.
+- Make sure you deploy the latest `firestore.rules` after updating.
 
 ## Hosting (Production)
 1. Run `npm run build`.

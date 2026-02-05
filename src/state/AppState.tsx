@@ -1,16 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   arrayUnion,
-  collection,
   deleteDoc,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
-  query,
   serverTimestamp,
   updateDoc,
-  where,
   setDoc,
 } from "firebase/firestore";
 import {
@@ -46,8 +42,9 @@ type AppState = {
   userName: string;
   adminCommunityCode: string | null;
   communities: Record<string, Community>;
-  communitiesLoaded: boolean;
   firebaseEnabled: boolean;
+  subscribeCommunity: (code: string) => () => void;
+  isCommunityLoaded: (code: string) => boolean;
   signIn: (input: SignInInput) => Promise<string | null>;
   signOut: () => Promise<void>;
   createCommunity: (input: { code: string; name: string; content?: string }) => Promise<string | null>;
@@ -72,19 +69,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     firebaseEnabled ? emptyStore : loadStore()
   );
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [communitiesLoaded, setCommunitiesLoaded] = useState(!firebaseEnabled);
+  const [communityStatus, setCommunityStatus] = useState<Record<string, boolean>>({});
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
   const signedIn = firebaseEnabled ? Boolean(currentUserId) : Boolean(currentUserId && currentUser);
   const userName = currentUser?.email ? nameFromEmail(currentUser.email) : "Neighbor";
-  const firebaseAdminCode =
-    firebaseEnabled && currentUser?.email
-      ? Object.values(communities).find((community) =>
-          community.admins.includes(currentUser.email)
-        )?.code ?? null
-      : null;
-  const adminCommunityCode = firebaseAdminCode ?? currentUser?.adminCommunityCode ?? null;
+  const adminCommunityCode = currentUser?.adminCommunityCode ?? null;
 
   const updateStore = (updater: (prev: StoreData) => StoreData) => {
     setStore((prev) => {
@@ -103,6 +94,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!snapshot.exists()) {
       await setDoc(userRef, {
         email,
+        adminCommunityCode: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -114,26 +106,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     connectEmulators();
 
     const auth = getFirebaseAuth();
-    const db = getFirebaseDb();
-
-    const unsubscribeCommunities = onSnapshot(collection(db, "communities"), (snapshot) => {
-      const nextCommunities: Record<string, Community> = {};
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Community;
-        if (!data?.code) return;
-        nextCommunities[data.code] = {
-          code: data.code,
-          name: data.name,
-          content: data.content,
-          admins: data.admins ?? [],
-        };
-      });
-      updateStore((prev) => ({
-        ...prev,
-        communities: nextCommunities,
-      }));
-      setCommunitiesLoaded(true);
-    });
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -144,7 +116,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     return () => {
-      unsubscribeCommunities();
       unsubscribeAuth();
     };
   }, [firebaseEnabled]);
@@ -171,6 +142,51 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return () => unsubscribe();
   }, [firebaseEnabled, currentUserId]);
+
+  const subscribeCommunity = (code: string) => {
+    const key = normalizeCode(code);
+    if (!key) return () => {};
+    setCommunityStatus((prev) => ({ ...prev, [key]: false }));
+
+    if (!firebaseEnabled) {
+      setCommunityStatus((prev) => ({ ...prev, [key]: true }));
+      return () => {};
+    }
+
+    const db = getFirebaseDb();
+    const ref = doc(db, "communities", key);
+    const unsubscribe = onSnapshot(ref, (snapshot) => {
+      updateStore((prev) => {
+        const nextCommunities = { ...prev.communities };
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Community;
+          nextCommunities[key] = {
+            code: data.code,
+            name: data.name,
+            content: data.content,
+            admins: data.admins ?? [],
+          };
+        } else {
+          delete nextCommunities[key];
+        }
+        return {
+          ...prev,
+          communities: nextCommunities,
+        };
+      });
+      setCommunityStatus((prev) => ({ ...prev, [key]: true }));
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  };
+
+  const isCommunityLoaded = (code: string) => {
+    const key = normalizeCode(code);
+    if (!key) return false;
+    return communityStatus[key] ?? false;
+  };
 
   const signIn = async (input: SignInInput) => {
     const email = normalizeEmail(input.email);
@@ -278,12 +294,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const userEmail = userData.email ?? "";
     if (!userEmail) return null;
 
-    const existingAdminQuery = query(
-      collection(db, "communities"),
-      where("admins", "array-contains", userEmail)
-    );
-    const existingAdminSnapshot = await getDocs(existingAdminQuery);
-    if (!existingAdminSnapshot.empty) return null;
+    if (userData.adminCommunityCode) return null;
 
     const nextCommunity: Community = {
       code,
@@ -297,6 +308,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await setDoc(communityRef, {
       ...nextCommunity,
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateDoc(userRef, {
+      adminCommunityCode: code,
       updatedAt: serverTimestamp(),
     });
 
@@ -358,6 +374,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const db = getFirebaseDb();
     await deleteDoc(doc(db, "communities", key));
+
+    if (currentUserId) {
+      await updateDoc(doc(db, "users", currentUserId), {
+        adminCommunityCode: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
   };
 
   const addAdmin = async (code: string, admin: string) => {
@@ -406,18 +429,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     const db = getFirebaseDb();
-    const existingAdminQuery = query(
-      collection(db, "communities"),
-      where("admins", "array-contains", adminId)
-    );
-    const existingAdminSnapshot = await getDocs(existingAdminQuery);
-    if (!existingAdminSnapshot.empty) {
-      const alreadyAdminElsewhere = existingAdminSnapshot.docs.some(
-        (docSnap) => docSnap.id !== key
-      );
-      if (alreadyAdminElsewhere) return;
-    }
-
     await updateDoc(doc(db, "communities", key), {
       admins: arrayUnion(adminId),
       updatedAt: serverTimestamp(),
@@ -437,7 +448,13 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return communities[key] ?? null;
   };
 
-  const isAdminFor = (code: string) => normalizeCode(code) === adminCommunityCode;
+  const isAdminFor = (code: string) => {
+    const key = normalizeCode(code);
+    if (currentUser?.email && communities[key]) {
+      return communities[key].admins.includes(currentUser.email);
+    }
+    return key === adminCommunityCode;
+  };
 
   const value = useMemo<AppState>(
     () => ({
@@ -445,8 +462,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       userName,
       adminCommunityCode,
       communities,
-      communitiesLoaded,
       firebaseEnabled,
+      subscribeCommunity,
+      isCommunityLoaded,
       signIn,
       signOut,
       createCommunity,
@@ -462,8 +480,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       userName,
       adminCommunityCode,
       communities,
-      communitiesLoaded,
       firebaseEnabled,
+      communityStatus,
+      subscribeCommunity,
+      isCommunityLoaded,
     ]
   );
 
