@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "./Modal";
-import { useAppState, toCommunitySlug } from "../state/AppState";
+import { useAppState } from "../state/AppState";
+import { toCommunitySlug } from "../data/normalize";
 
 type CreateCommunityModalProps = {
   isOpen: boolean;

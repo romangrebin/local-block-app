@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state/AppState";
 import { HomePage } from "./pages/HomePage";
 import { CommunityPage } from "./pages/CommunityPage";
+import { ManageCommunityPage } from "./pages/ManageCommunityPage";
 import { NotFound } from "./pages/NotFound";
 import { AuthModal } from "./components/AuthModal";
 import { CreateCommunityModal } from "./components/CreateCommunityModal";
@@ -82,20 +83,13 @@ const AppShell: React.FC = () => {
             <Route
               path="/:code"
               element={
-                <CommunityPage
-                  onOpenAuth={() => setShowAuth(true)}
-                  onOpenCreate={() => setShowCreate(true)}
-                />
+                <CommunityPage onOpenCreate={() => setShowCreate(true)} />
               }
             />
             <Route
               path="/:code/manage"
               element={
-                <CommunityPage
-                  onOpenAuth={() => setShowAuth(true)}
-                  onOpenCreate={() => setShowCreate(true)}
-                  openManageOnLoad
-                />
+                <ManageCommunityPage onOpenAuth={() => setShowAuth(true)} />
               }
             />
             <Route path="*" element={<NotFound />} />

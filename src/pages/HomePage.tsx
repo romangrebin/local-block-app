@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { toCommunitySlug, useAppState } from "../state/AppState";
+import { useAppState } from "../state/AppState";
+import { toCommunitySlug } from "../data/normalize";
 
 type HomePageProps = {
   onOpenAuth: () => void;

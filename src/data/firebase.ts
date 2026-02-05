@@ -20,7 +20,6 @@ export const isFirebaseConfigured = () =>
 const isConfigured = isFirebaseConfigured();
 
 export const isFirebaseEnabled = () => import.meta.env.VITE_USE_FIREBASE === "true";
-
 let cachedApp: FirebaseApp | null = null;
 let emulatorConnected = false;
 

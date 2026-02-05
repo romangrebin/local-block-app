@@ -1,23 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useAppState, toCommunitySlug } from "../state/AppState";
-import { ManageCommunityModal } from "../components/ManageCommunityModal";
+import { useAppState } from "../state/AppState";
+import { toCommunitySlug } from "../data/normalize";
 
 type CommunityPageProps = {
-  onOpenAuth: () => void;
   onOpenCreate: () => void;
-  openManageOnLoad?: boolean;
 };
 
-export const CommunityPage: React.FC<CommunityPageProps> = ({
-  onOpenAuth,
-  onOpenCreate,
-  openManageOnLoad = false,
-}) => {
+export const CommunityPage: React.FC<CommunityPageProps> = ({ onOpenCreate }) => {
   const params = useParams();
-  const navigate = useNavigate();
   const rawCode = params.code ?? "";
   const communityCode = toCommunitySlug(rawCode) || rawCode;
   const displayCode = rawCode.trim() || communityCode || "unknown";
@@ -31,28 +24,12 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     isCommunityLoaded,
   } = useAppState();
 
-  const [showManage, setShowManage] = useState(openManageOnLoad);
   const community = getCommunity(communityCode);
   const communityLoaded = isCommunityLoaded(communityCode);
 
   useEffect(() => {
     return subscribeCommunity(communityCode);
   }, [communityCode, subscribeCommunity]);
-
-  const handleManageOpen = () => {
-    setShowManage(true);
-    navigate(`/${communityCode}/manage`);
-  };
-
-  const handleManageClose = () => {
-    setShowManage(false);
-    navigate(`/${communityCode}`);
-  };
-
-  const handleDeleted = () => {
-    setShowManage(false);
-    navigate("/", { replace: true });
-  };
 
   if (!community && !communityLoaded) {
     return (
@@ -91,13 +68,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
   const isAdmin = signedIn && isAdminFor(communityCode);
   const canCreate = signedIn && !adminCommunityCode;
-  const manageBlocked = openManageOnLoad && !isAdmin;
-
-  useEffect(() => {
-    if (openManageOnLoad && isAdmin) {
-      setShowManage(true);
-    }
-  }, [openManageOnLoad, isAdmin]);
 
   return (
     <div className="page">
@@ -109,9 +79,9 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         </div>
         <div className="action-stack">
           {isAdmin ? (
-            <button className="button" onClick={handleManageOpen}>
+            <Link className="button" to={`/${communityCode}/manage`}>
               Manage community
-            </button>
+            </Link>
           ) : null}
           {canCreate ? (
             <button className="button ghost" onClick={onOpenCreate}>
@@ -142,30 +112,6 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           </p>
         </aside>
       </div>
-      {manageBlocked ? (
-        <div className="card warning-card">
-          <p className="eyebrow">Admin access</p>
-          <h3>Sign in to manage this community.</h3>
-          <p className="helper-text">
-            Only admins for {community.code} can edit content or add organizers.
-          </p>
-          <div className="cta-row">
-            <button className="button" onClick={onOpenAuth}>
-              Sign in
-            </button>
-            <Link className="button ghost" to={`/${community.code}`}>
-              Back to community
-            </Link>
-          </div>
-        </div>
-      ) : null}
-
-      <ManageCommunityModal
-        isOpen={showManage && isAdmin}
-        onClose={handleManageClose}
-        community={community}
-        onDeleted={handleDeleted}
-      />
     </div>
   );
 };

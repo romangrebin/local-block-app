@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import process from "process";
 import { initializeApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 const serviceAccountPath =
@@ -49,7 +50,6 @@ communityValues.forEach((community) => {
       code: community.code,
       name: community.name,
       content: community.content,
-      admins: community.admins ?? [],
       updatedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -59,3 +59,38 @@ communityValues.forEach((community) => {
 
 await batch.commit();
 console.log(`Seeded ${communityValues.length} communities.`);
+
+const auth = getAuth();
+const adminLinks = seed.communityAdmins ?? {};
+const adminValues = Object.values(adminLinks);
+
+if (!adminValues.length) {
+  console.log("No community admin links found in seed file.");
+  process.exit(0);
+}
+
+let seededAdmins = 0;
+for (const admin of adminValues) {
+  const email = admin?.email ?? admin?.userId;
+  const communityCode = admin?.communityCode;
+  if (!email || !communityCode) continue;
+  try {
+    const userRecord = await auth.getUserByEmail(email);
+    const adminRef = db.collection("communityAdmins").doc(userRecord.uid);
+    await adminRef.set(
+      {
+        userId: userRecord.uid,
+        communityCode,
+        email: userRecord.email ?? email,
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    seededAdmins += 1;
+  } catch (error) {
+    console.log(`Skipping admin ${email} (user not found).`);
+  }
+}
+
+console.log(`Seeded ${seededAdmins} community admin links.`);

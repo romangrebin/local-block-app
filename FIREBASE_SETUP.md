@@ -58,6 +58,7 @@ If `VITE_USE_FIREBASE` is `false`, the app falls back to the local JSON seed dat
 2. Run `firebase init hosting`.
 3. Deploy with `firebase deploy`.
 
+
 ## GitHub Actions (Manual Deploy)
 1. Add repo secrets for the build:
    - `VITE_FIREBASE_API_KEY`
