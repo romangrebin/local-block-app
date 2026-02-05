@@ -53,6 +53,18 @@ If `VITE_USE_FIREBASE` is `false`, the app falls back to the local JSON seed dat
 2. Run `firebase init hosting`.
 3. Deploy with `firebase deploy`.
 
+## GitHub Actions (Manual Deploy)
+1. Add repo secrets for the build:
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+   - `VITE_FIREBASE_MEASUREMENT_ID`
+2. Add a service account JSON as the secret `FIREBASE_SERVICE_ACCOUNT`.
+3. The workflow `Deploy to Firebase Hosting (Manual)` can be run from the Actions tab.
+
 ## Secrets & Open Source
 - The Firebase web config is *not* a secret, but should still live in `.env.local` to keep config out of source control.
 - `.env.local` is gitignored. Share `.env.example` in the repo.

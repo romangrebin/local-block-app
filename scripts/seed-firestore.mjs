@@ -5,6 +5,7 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 const serviceAccountPath =
+  process.env.GOOGLE_APPLICATION_CREDENTIALS ||
   process.env.FIREBASE_SERVICE_ACCOUNT ||
   path.join(process.cwd(), ".secrets/firebase-service-account.json");
 
