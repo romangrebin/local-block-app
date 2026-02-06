@@ -13,18 +13,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
   const navigate = useNavigate();
   const {
     signedIn,
-    adminCommunityCode,
+    memberCommunityCode,
     getCommunity,
     subscribeCommunity,
     isCommunityLoaded,
-    firebaseEnabled,
   } = useAppState();
-  const adminCommunity = adminCommunityCode ? getCommunity(adminCommunityCode) : null;
+  const memberCommunity = memberCommunityCode ? getCommunity(memberCommunityCode) : null;
+  const hasMemberCommunity = Boolean(memberCommunityCode);
 
   useEffect(() => {
-    if (!adminCommunityCode) return;
-    return subscribeCommunity(adminCommunityCode);
-  }, [adminCommunityCode, subscribeCommunity]);
+    if (!memberCommunityCode) return;
+    return subscribeCommunity(memberCommunityCode);
+  }, [memberCommunityCode, subscribeCommunity]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -34,6 +34,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
   };
 
   const renderCta = () => {
+    if (hasMemberCommunity) return null;
     if (!signedIn) {
       return (
         <button className="button ghost" onClick={onOpenAuth}>
@@ -42,19 +43,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
       );
     }
 
-    if (adminCommunityCode && !isCommunityLoaded(adminCommunityCode)) {
+    if (memberCommunityCode && !isCommunityLoaded(memberCommunityCode)) {
       return (
         <button className="button ghost" type="button" disabled>
           Loading your block...
         </button>
-      );
-    }
-
-    if (adminCommunityCode) {
-      return (
-        <Link className="button ghost" to={`/${adminCommunityCode}`}>
-          Open {adminCommunity?.name ?? "your block"}
-        </Link>
       );
     }
 
@@ -65,61 +58,47 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     );
   };
 
+  const cta = renderCta();
+
   return (
-    <div className="page">
-      <section className="hero">
-        <div>
+    <div className="page home-page">
+      <section className="hero hero-home">
+        <div className="hero-copy">
           <h1>Your block's private landing page</h1>
           <p className="lead">
             Use a code to open your block page with chats, events, and organizer info.
           </p>
-          <ul className="flow-list">
-            <li>
-              <strong>Have a code?</strong> Enter it below. No sign-in needed.
-            </li>
-            <li>
-              <strong>Need a code?</strong> Ask a neighbor, or sign in to create a community.
-            </li>
-          </ul>
-          <form className="code-form" onSubmit={handleSubmit}>
+          {hasMemberCommunity ? (
+            <div className="home-primary-cta">
+              <div>
+                <p className="eyebrow">Your block</p>
+                <p className="lead">
+                  Jump back into{" "}
+                  <strong>{memberCommunity?.name ?? "your block"}</strong>.
+                </p>
+              </div>
+              <Link className="button" to={`/${memberCommunityCode}`}>
+                Open {memberCommunityCode}
+              </Link>
+            </div>
+          ) : null}
+          <form className="code-form code-form-home" onSubmit={handleSubmit}>
             <input
               value={code}
               onChange={(event) => setCode(event.target.value)}
-              placeholder="Enter block code"
+              placeholder={hasMemberCommunity ? "Open another block code" : "Enter block code"}
               aria-label="Block code"
             />
             <button className="button" type="submit">
-              Open block page
+              {hasMemberCommunity ? "Open another block" : "Open block page"}
             </button>
           </form>
-          <p className="helper-text">
-            Codes are shared neighbor-to-neighbor and are not listed or searchable.
-          </p>
-        </div>
-        <div className="card showcase">
-          {!firebaseEnabled ? (
-            <>
-              <h3>Demo blocks</h3>
-              <p>Use these sample codes to preview a block page.</p>
-              <div className="pill-row">
-                <Link className="pill" to="/maple-hill">
-                  maple-hill
-                </Link>
-                <Link className="pill" to="/citrus-park">
-                  citrus-park
-                </Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <h3>Need a code?</h3>
-              <p>
-                Ask a neighbor for your block's code, or sign in to create a community and get
-                one.
-              </p>
-            </>
-          )}
-          <div className="cta-row">{renderCta()}</div>
+          <div className="home-actions">
+            <p className="helper-text">
+              Codes are shared neighbor-to-neighbor and are not listed or searchable.
+            </p>
+            {cta ? <div className="cta-row">{cta}</div> : null}
+          </div>
         </div>
       </section>
     </div>

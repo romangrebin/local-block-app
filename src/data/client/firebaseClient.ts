@@ -17,16 +17,26 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import type { Community, CommunityAdmin, User } from "../models";
+import type { Community, CommunityMember, User } from "../models";
 import type { CreateCommunityInput, SignInInput } from "../types";
-import { DEFAULT_COMMUNITY_CONTENT, DEFAULT_COMMUNITY_NAME } from "../constants";
+import {
+  DEFAULT_COMMUNITY_CONTENT,
+  DEFAULT_COMMUNITY_NAME,
+  DEFAULT_MEMBER_CONTENT,
+} from "../constants";
 import { normalizeCode, normalizeEmail } from "../normalize";
 import {
   connectEmulators,
   getFirebaseAuth,
   getFirebaseDb,
 } from "../firebase";
-import type { AddAdminResult, CreateCommunityResult, DataClient, SignInResult } from "./types";
+import type {
+  AddAdminResult,
+  CreateCommunityResult,
+  DataClient,
+  MembershipResult,
+  SignInResult,
+} from "./types";
 
 const ensureUserDoc = async (userId: string, email: string) => {
   const db = getFirebaseDb();
@@ -35,7 +45,7 @@ const ensureUserDoc = async (userId: string, email: string) => {
   if (!snapshot.exists()) {
     await setDoc(userRef, {
       email,
-      adminCommunityCode: null,
+      memberCommunityCode: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -65,7 +75,8 @@ export const createFirebaseClient = (): DataClient => ({
       callback({
         id: userId,
         email: data.email ?? "",
-        adminCommunityCode: data.adminCommunityCode ?? null,
+        memberCommunityCode:
+          data.memberCommunityCode ?? data.adminCommunityCode ?? null,
       });
     });
   },
@@ -87,47 +98,54 @@ export const createFirebaseClient = (): DataClient => ({
         code: data.code,
         name: data.name,
         content: data.content,
+        memberContent: data.memberContent,
       });
     });
   },
-  subscribeAdminLink: (userId, callback) => {
+  subscribeMembership: (code, userId, callback) => {
+    const key = normalizeCode(code);
+    if (!key || !userId) {
+      callback(null);
+      return () => {};
+    }
     const db = getFirebaseDb();
-    const ref = doc(db, "communityAdmins", userId);
+    const ref = doc(db, "communities", key, "members", userId);
     return onSnapshot(ref, (snapshot) => {
       if (!snapshot.exists()) {
         callback(null);
         return;
       }
-      const data = snapshot.data() as CommunityAdmin;
+      const data = snapshot.data() as CommunityMember;
       callback({
         userId,
-        communityCode: data.communityCode,
+        communityCode: data.communityCode ?? key,
         email: data.email,
+        role: data.role,
+        status: data.status,
       });
     });
   },
-  subscribeCommunityAdmins: (code, callback) => {
+  subscribeCommunityMembers: (code, callback) => {
     const key = normalizeCode(code);
     if (!key) {
       callback([]);
       return () => {};
     }
     const db = getFirebaseDb();
-    const adminsQuery = query(
-      collection(db, "communityAdmins"),
-      where("communityCode", "==", key)
-    );
-    return onSnapshot(adminsQuery, (snapshot) => {
-      const admins: CommunityAdmin[] = [];
+    const membersRef = collection(db, "communities", key, "members");
+    return onSnapshot(membersRef, (snapshot) => {
+      const members: CommunityMember[] = [];
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as CommunityAdmin;
-        admins.push({
+        const data = docSnap.data() as CommunityMember;
+        members.push({
           userId: docSnap.id,
-          communityCode: data.communityCode,
+          communityCode: data.communityCode ?? key,
           email: data.email,
+          role: data.role,
+          status: data.status,
         });
       });
-      callback(admins);
+      callback(members);
     });
   },
   signIn: async (input: SignInInput): Promise<SignInResult> => {
@@ -170,14 +188,17 @@ export const createFirebaseClient = (): DataClient => ({
     const userData = userSnap.data() as User;
     const userEmail = userData.email ?? "";
     if (!userEmail) return { error: "User email missing." };
-    const adminRef = doc(db, "communityAdmins", input.currentUserId);
-    const adminSnap = await getDoc(adminRef);
-    if (adminSnap.exists()) return { error: "User already admins a block." };
+    const memberCommunityCode =
+      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
+    if (memberCommunityCode) {
+      return { error: "User already belongs to a block." };
+    }
 
     const nextCommunity: Community = {
       code,
       name: input.name.trim() || DEFAULT_COMMUNITY_NAME,
       content: input.content?.trim() || DEFAULT_COMMUNITY_CONTENT,
+      memberContent: DEFAULT_MEMBER_CONTENT,
     };
 
     await setDoc(communityRef, {
@@ -186,11 +207,18 @@ export const createFirebaseClient = (): DataClient => ({
       updatedAt: serverTimestamp(),
     });
 
-    await setDoc(adminRef, {
+    await setDoc(doc(db, "communities", code, "members", input.currentUserId), {
       userId: input.currentUserId,
       communityCode: code,
       email: userEmail,
+      role: "admin",
+      status: "active",
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateDoc(userRef, {
+      memberCommunityCode: code,
       updatedAt: serverTimestamp(),
     });
 
@@ -209,26 +237,27 @@ export const createFirebaseClient = (): DataClient => ({
     const key = normalizeCode(code);
     if (!key) return;
     const db = getFirebaseDb();
-    await deleteDoc(doc(db, "communities", key));
-    const adminsQuery = query(
-      collection(db, "communityAdmins"),
-      where("communityCode", "==", key)
-    );
-    const adminsSnap = await getDocs(adminsQuery);
-    const docs = adminsSnap.docs;
-    const currentAdminDoc = currentUserId
-      ? docs.find((docSnap) => docSnap.id === currentUserId)
-      : undefined;
-    const otherDocs = currentAdminDoc
-      ? docs.filter((docSnap) => docSnap.id !== currentUserId)
-      : docs;
-
-    for (const docSnap of otherDocs) {
+    const membersRef = collection(db, "communities", key, "members");
+    const membersSnap = await getDocs(membersRef);
+    for (const docSnap of membersSnap.docs) {
+      const data = docSnap.data() as CommunityMember;
+      const userId = data.userId ?? docSnap.id;
       await deleteDoc(docSnap.ref);
+      if (userId) {
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data() as User;
+          if (userData.memberCommunityCode === key) {
+            await updateDoc(userRef, {
+              memberCommunityCode: null,
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
+      }
     }
-    if (currentAdminDoc) {
-      await deleteDoc(currentAdminDoc.ref);
-    }
+    await deleteDoc(doc(db, "communities", key));
   },
   addAdmin: async (code, adminEmail): Promise<AddAdminResult> => {
     const key = normalizeCode(code);
@@ -249,24 +278,148 @@ export const createFirebaseClient = (): DataClient => ({
 
     const userDoc = usersSnap.docs[0];
     const userId = userDoc.id;
-    const adminRef = doc(db, "communityAdmins", userId);
-    const adminSnap = await getDoc(adminRef);
-    if (adminSnap.exists()) {
-      const data = adminSnap.data() as CommunityAdmin;
-      if (data.communityCode !== key) {
-        return { ok: false, error: "That user already admins another block." };
-      }
-      return { ok: true };
+    const userData = userDoc.data() as User;
+    const memberCommunityCode =
+      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
+    if (memberCommunityCode && memberCommunityCode !== key) {
+      return { ok: false, error: "That user already belongs to another block." };
     }
 
-    await setDoc(adminRef, {
-      userId,
-      communityCode: key,
-      email: adminId,
-      createdAt: serverTimestamp(),
+    const memberRef = doc(db, "communities", key, "members", userId);
+    const memberSnap = await getDoc(memberRef);
+    if (memberSnap.exists()) {
+      const data = memberSnap.data() as CommunityMember;
+      if (data.role === "admin" && data.status === "active") {
+        return { ok: true };
+      }
+      await updateDoc(memberRef, {
+        role: "admin",
+        status: "active",
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(memberRef, {
+        userId,
+        communityCode: key,
+        email: adminId,
+        role: "admin",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    if (!memberCommunityCode) {
+      await updateDoc(doc(db, "users", userId), {
+        memberCommunityCode: key,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return { ok: true };
+  },
+  requestMembership: async (
+    code: string,
+    currentUserId: string
+  ): Promise<MembershipResult> => {
+    const key = normalizeCode(code);
+    if (!key) return { ok: false, error: "Community code is required." };
+    if (!currentUserId) return { ok: false, error: "User not signed in." };
+
+    const db = getFirebaseDb();
+    const communitySnap = await getDoc(doc(db, "communities", key));
+    if (!communitySnap.exists()) {
+      return { ok: false, error: "Community not found." };
+    }
+    const userRef = doc(db, "users", currentUserId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) return { ok: false, error: "User not found." };
+    const userData = userSnap.data() as User;
+    const userEmail = userData.email ?? "";
+    if (!userEmail) return { ok: false, error: "User email missing." };
+
+    const memberCommunityCode =
+      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
+    if (memberCommunityCode && memberCommunityCode !== key) {
+      return { ok: false, error: "You already belong to another community." };
+    }
+
+    const memberRef = doc(db, "communities", key, "members", currentUserId);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) {
+      await setDoc(memberRef, {
+        userId: currentUserId,
+        communityCode: key,
+        email: userEmail,
+        role: "member",
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    if (!memberCommunityCode) {
+      await updateDoc(userRef, {
+        memberCommunityCode: key,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return { ok: true };
+  },
+  approveMembership: async (
+    code: string,
+    userId: string
+  ): Promise<MembershipResult> => {
+    const key = normalizeCode(code);
+    if (!key || !userId) return { ok: false, error: "Missing member." };
+    const db = getFirebaseDb();
+    const memberRef = doc(db, "communities", key, "members", userId);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) {
+      return { ok: false, error: "Membership not found." };
+    }
+    await updateDoc(memberRef, {
+      status: "active",
       updatedAt: serverTimestamp(),
     });
-
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const userData = userSnap.data() as User;
+      if (userData.memberCommunityCode !== key) {
+        await updateDoc(userRef, {
+          memberCommunityCode: key,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+    return { ok: true };
+  },
+  denyMembership: async (
+    code: string,
+    userId: string
+  ): Promise<MembershipResult> => {
+    const key = normalizeCode(code);
+    if (!key || !userId) return { ok: false, error: "Missing member." };
+    const db = getFirebaseDb();
+    const memberRef = doc(db, "communities", key, "members", userId);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) {
+      return { ok: false, error: "Membership not found." };
+    }
+    await deleteDoc(memberRef);
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const userData = userSnap.data() as User;
+      if (userData.memberCommunityCode === key) {
+        await updateDoc(userRef, {
+          memberCommunityCode: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
     return { ok: true };
   },
 });

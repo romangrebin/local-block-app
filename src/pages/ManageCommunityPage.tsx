@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { CommunityHeader } from "../components/CommunityHeader";
 import { useAppState } from "../state/AppState";
 import { toCommunitySlug } from "../data/normalize";
 
@@ -33,12 +34,14 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   const isAdmin = signedIn && isAdminFor(communityCode);
 
   const [content, setContent] = useState(community?.content ?? "");
+  const [memberContent, setMemberContent] = useState(community?.memberContent ?? "");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminError, setAdminError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   useEffect(() => {
     return subscribeCommunity(communityCode);
@@ -47,6 +50,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   useEffect(() => {
     if (!community) return;
     setContent(community.content);
+    setMemberContent(community.memberContent ?? "");
     setAdminError("");
     setSaved(false);
   }, [community?.code]);
@@ -93,12 +97,14 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   }
 
   const adminEmails = getCommunityAdmins(community.code);
-  const hasChanges = content !== community.content;
+  const hasChanges =
+    content !== community.content ||
+    memberContent !== (community.memberContent ?? "");
 
   const handleSave = async () => {
     if (!community || saving) return;
     setSaving(true);
-    await updateCommunity(community.code, { content });
+    await updateCommunity(community.code, { content, memberContent });
     setSaving(false);
     setSaved(true);
   };
@@ -127,25 +133,23 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   if (!isAdmin) {
     return (
       <div className="page manage-page">
-        <section className="community-header">
-          <div>
-          <p className="eyebrow">Manage block</p>
-          <h1>{community.name}</h1>
-          <p className="lead">Code {community.code}</p>
-        </div>
-        <div className="action-stack">
-          <Link className="button ghost" to={`/${community.code}`}>
-            Back to block page
-          </Link>
-        </div>
-      </section>
-      <div className="card warning-card">
-        <p className="eyebrow">Admin access</p>
-        <h3>Only admins can manage this block.</h3>
-        <p className="helper-text">
-          Sign in with an admin account to edit content or add organizers.
-        </p>
-        <div className="cta-row">
+        <CommunityHeader
+          community={community}
+          active="manage"
+          showAdminTabs={false}
+          actions={
+            <Link className="button ghost" to={`/${community.code}`}>
+              Back to block
+            </Link>
+          }
+        />
+        <div className="card warning-card">
+          <p className="eyebrow">Admin access</p>
+          <h3>Only admins can manage this block.</h3>
+          <p className="helper-text">
+            Sign in with an admin account to edit content or add organizers.
+          </p>
+          <div className="cta-row">
             {!signedIn ? (
               <button className="button" onClick={onOpenAuth}>
                 Sign in
@@ -162,36 +166,54 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
 
   return (
     <div className="page manage-page">
-      <section className="manage-header">
-        <div>
-          <p className="eyebrow">Manage block</p>
-          <h1>{community.name}</h1>
-          <p className="lead">Code {community.code}</p>
-        </div>
-        <div className="manage-actions">
-          {saved ? <span className="manage-status">Saved</span> : null}
-          {hasChanges && !saved ? (
-            <span className="manage-status">Unsaved changes</span>
-          ) : null}
-          <Link className="button ghost" to={`/${community.code}`}>
-            Back to block page
-          </Link>
-          <button
-            className="button"
-            type="button"
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
-            {saving ? "Saving..." : "Save changes"}
-          </button>
-        </div>
-      </section>
+      <CommunityHeader
+        community={community}
+        active="manage"
+        showAdminTabs
+        actions={
+          <>
+            {saved ? <span className="manage-status">Saved</span> : null}
+            {hasChanges && !saved ? (
+              <span className="manage-status">Unsaved changes</span>
+            ) : null}
+            <button
+              className="button"
+              type="button"
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </button>
+          </>
+        }
+      />
 
-      <section className="manage-grid">
+      <section className={`manage-grid ${showPreview ? "" : "manage-grid-single"}`}>
         <div className="card manage-editor">
-          <div>
-            <p className="section-title">Block content (markdown)</p>
-            <p className="helper-text">This content appears on the block page.</p>
+          <div className="editor-header">
+            <div>
+              <p className="section-title">Block content (markdown)</p>
+              <p className="helper-text">This content appears on the block page.</p>
+            </div>
+            <div className="preview-toggle">
+              <span className="helper-text">Live preview</span>
+              <div className="toggle">
+                <button
+                  type="button"
+                  className={showPreview ? "toggle-active" : ""}
+                  onClick={() => setShowPreview(true)}
+                >
+                  On
+                </button>
+                <button
+                  type="button"
+                  className={!showPreview ? "toggle-active" : ""}
+                  onClick={() => setShowPreview(false)}
+                >
+                  Off
+                </button>
+              </div>
+            </div>
           </div>
           <textarea
             className="manage-textarea"
@@ -203,56 +225,74 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
             }}
           />
         </div>
-        <div className="card manage-preview">
-          <p className="section-title">Live preview</p>
-          <div className="preview-card">
-            <div className="markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || "_No content yet_"}
-              </ReactMarkdown>
+        {showPreview ? (
+          <div className="card manage-preview">
+            <p className="section-title">Preview</p>
+            <div className="preview-card">
+              <div className="markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {content || "_No content yet_"}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
-      <section className="manage-lower">
-        <div className="card">
-          <p className="section-title">Admins</p>
-          <ul className="admin-list">
-            {adminEmails.length ? (
-              adminEmails.map((admin) => <li key={admin}>{admin}</li>)
-            ) : (
-              <li>Only you (for now)</li>
-            )}
-          </ul>
-          <form className="inline-form" onSubmit={handleAddAdmin}>
-            <input
-              value={adminEmail}
-              onChange={(event) => {
-                setAdminEmail(event.target.value);
-                if (adminError) setAdminError("");
-              }}
-              placeholder="new-admin@email.com"
-              type="email"
-            />
-            <button className="button ghost" type="submit">
-              Add admin
-            </button>
-          </form>
-          {adminError ? <p className="helper-text error-text">{adminError}</p> : null}
+      <section className="manage-secondary">
+        <div className="card member-editor">
+          <p className="section-title">Member-only note</p>
+          <p className="helper-text">Visible only to verified neighbors.</p>
+          <textarea
+            className="member-textarea"
+            rows={4}
+            value={memberContent}
+            onChange={(event) => {
+              setMemberContent(event.target.value);
+              if (saved) setSaved(false);
+            }}
+            placeholder="Add a short private update for members."
+          />
         </div>
-        <div className="card manage-danger">
-          <p className="section-title">Danger zone</p>
-          <p className="helper-text">
-            Deleting a block permanently removes its content and admin list.
-          </p>
-          <button
-            className="button ghost danger"
-            type="button"
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            Delete block
-          </button>
+        <div className="stack">
+          <div className="card">
+            <p className="section-title">Admins</p>
+            <ul className="admin-list">
+              {adminEmails.length ? (
+                adminEmails.map((admin) => <li key={admin}>{admin}</li>)
+              ) : (
+                <li>Only you (for now)</li>
+              )}
+            </ul>
+            <form className="inline-form" onSubmit={handleAddAdmin}>
+              <input
+                value={adminEmail}
+                onChange={(event) => {
+                  setAdminEmail(event.target.value);
+                  if (adminError) setAdminError("");
+                }}
+                placeholder="new-admin@email.com"
+                type="email"
+              />
+              <button className="button ghost" type="submit">
+                Add admin
+              </button>
+            </form>
+            {adminError ? <p className="helper-text error-text">{adminError}</p> : null}
+          </div>
+          <div className="card manage-danger">
+            <p className="section-title">Danger zone</p>
+            <p className="helper-text">
+              Deleting a block permanently removes its content and admin list.
+            </p>
+            <button
+              className="button ghost danger"
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Delete block
+            </button>
+          </div>
         </div>
       </section>
 

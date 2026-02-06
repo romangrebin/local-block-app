@@ -5,14 +5,34 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function adminCommunityCode() {
-      return exists(/databases/$(database)/documents/communityAdmins/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/communityAdmins/$(request.auth.uid)).data.communityCode
-        : null;
+    function memberDoc(communityId, userId) {
+      return get(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
+    }
+
+    function memberExists(communityId, userId) {
+      return exists(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
+    }
+
+    function isActiveMember(communityId, userId) {
+      return isSignedIn()
+        && memberExists(communityId, userId)
+        && memberDoc(communityId, userId).data.status == "active";
     }
 
     function isAdminFor(communityId) {
-      return isSignedIn() && adminCommunityCode() == communityId;
+      return isActiveMember(communityId, request.auth.uid)
+        && memberDoc(communityId, request.auth.uid).data.role == "admin";
+    }
+
+    function userMemberCommunity(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        ? get(/databases/$(database)/documents/users/$(userId)).data.memberCommunityCode
+        : null;
+    }
+
+    function adminUpdatesMemberCode() {
+      return request.resource.data.diff(resource.data).changedKeys()
+        .hasOnly(["memberCommunityCode", "updatedAt"]);
     }
 
     match /communities/{communityId} {
@@ -20,10 +40,47 @@ service cloud.firestore {
       allow list: if false;
       allow create: if isSignedIn()
         && request.resource.data.code == communityId
-        && !exists(/databases/$(database)/documents/communityAdmins/$(request.auth.uid));
+        && userMemberCommunity(request.auth.uid) == null;
       allow update: if isAdminFor(communityId)
         && request.resource.data.code == resource.data.code;
       allow delete: if isAdminFor(communityId);
+
+      match /members/{userId} {
+        allow get: if isSignedIn() && (
+          request.auth.uid == userId
+          || isAdminFor(communityId)
+        );
+        allow list: if isAdminFor(communityId);
+        allow create: if isSignedIn()
+          && request.resource.data.userId == userId
+          && request.resource.data.communityCode == communityId
+          && request.resource.data.email is string
+          && exists(/databases/$(database)/documents/communities/$(communityId))
+          && (
+            userMemberCommunity(userId) == null
+            || userMemberCommunity(userId) == communityId
+          )
+          && (
+            (
+              request.auth.uid == userId
+              && request.resource.data.role == "member"
+              && request.resource.data.status == "pending"
+              && request.resource.data.email == request.auth.token.email
+            )
+            || (
+              isAdminFor(communityId)
+              && request.resource.data.status == "active"
+            )
+          );
+        allow update: if isAdminFor(communityId)
+          && request.resource.data.userId == userId
+          && request.resource.data.communityCode == communityId
+          && request.resource.data.email == resource.data.email;
+        allow delete: if isSignedIn() && (
+          request.auth.uid == userId
+          || isAdminFor(communityId)
+        );
+      }
     }
 
     match /users/{userId} {
@@ -32,35 +89,23 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.email == request.auth.token.email;
       allow update: if isSignedIn()
-        && request.auth.uid == userId
-        && request.resource.data.email == resource.data.email;
-    }
-
-    match /communityAdmins/{userId} {
-      allow get: if isSignedIn() && request.auth.uid == userId;
-      allow list: if isSignedIn() && adminCommunityCode() == resource.data.communityCode;
-      allow create: if isSignedIn()
-        && request.resource.data.userId == userId
-        && request.resource.data.communityCode is string
-        && request.resource.data.email is string
-        && !exists(/databases/$(database)/documents/communityAdmins/$(userId))
-        && exists(/databases/$(database)/documents/communities/$(request.resource.data.communityCode))
-        && (
-          request.auth.uid == userId
-          || adminCommunityCode() == request.resource.data.communityCode
-        );
-      allow update: if isSignedIn()
-        && request.resource.data.userId == userId
-        && request.resource.data.communityCode == resource.data.communityCode
         && request.resource.data.email == resource.data.email
         && (
           request.auth.uid == userId
-          || adminCommunityCode() == resource.data.communityCode
-        );
-      allow delete: if isSignedIn()
-        && (
-          request.auth.uid == userId
-          || adminCommunityCode() == resource.data.communityCode
+          || (
+            adminUpdatesMemberCode()
+            && (
+              (
+                request.resource.data.memberCommunityCode is string
+                && isAdminFor(request.resource.data.memberCommunityCode)
+              )
+              || (
+                request.resource.data.memberCommunityCode == null
+                && resource.data.memberCommunityCode is string
+                && isAdminFor(resource.data.memberCommunityCode)
+              )
+            )
+          )
         );
     }
   }

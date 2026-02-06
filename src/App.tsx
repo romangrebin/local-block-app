@@ -1,9 +1,16 @@
 import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+} from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state/AppState";
 import { HomePage } from "./pages/HomePage";
 import { CommunityPage } from "./pages/CommunityPage";
 import { ManageCommunityPage } from "./pages/ManageCommunityPage";
+import { MemberDirectoryPage } from "./pages/MemberDirectoryPage";
 import { NotFound } from "./pages/NotFound";
 import { AuthModal } from "./components/AuthModal";
 import { CreateCommunityModal } from "./components/CreateCommunityModal";
@@ -14,8 +21,15 @@ const Header: React.FC<{
   onOpenCreate: () => void;
   onOpenSignOut: () => void;
 }> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
-  const { signedIn, adminCommunityCode, userName, getCommunity } = useAppState();
-  const adminCommunity = adminCommunityCode ? getCommunity(adminCommunityCode) : null;
+  const {
+    signedIn,
+    adminCommunityCode,
+    memberCommunityCode,
+    userName,
+    getCommunity,
+  } = useAppState();
+  const communityCode = adminCommunityCode ?? memberCommunityCode;
+  const community = communityCode ? getCommunity(communityCode) : null;
 
   return (
     <header className="topbar">
@@ -29,14 +43,15 @@ const Header: React.FC<{
         {signedIn ? (
           <div className="user-chip">
             <span>Hi {userName}</span>
-            {adminCommunityCode ? (
-              <Link className="badge link-badge" to={`/${adminCommunityCode}`}>
-                Admin of {adminCommunity?.name ?? adminCommunityCode}
+            {communityCode ? (
+              <Link className="badge link-badge" to={`/${communityCode}`}>
+                {adminCommunityCode ? "Admin" : "Member"} of{" "}
+                {community?.name ?? communityCode}
               </Link>
             ) : null}
           </div>
         ) : null}
-        {signedIn && !adminCommunityCode ? (
+        {signedIn && !memberCommunityCode ? (
           <button className="button ghost" onClick={onOpenCreate}>
             Create block
           </button>
@@ -55,6 +70,67 @@ const Header: React.FC<{
   );
 };
 
+const AppFrame: React.FC<{
+  onOpenAuth: () => void;
+  onOpenCreate: () => void;
+  onOpenSignOut: () => void;
+}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
+  const location = useLocation();
+  const { signedIn } = useAppState();
+  const isPublic = location.pathname === "/";
+  const appClassName = [
+    "app",
+    isPublic ? "app-public" : "app-community",
+    signedIn ? "signed-in" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className={appClassName}>
+      <Header
+        onOpenAuth={onOpenAuth}
+        onOpenCreate={onOpenCreate}
+        onOpenSignOut={onOpenSignOut}
+      />
+      <main className={`main-shell ${isPublic ? "main-public" : "main-community"}`}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <HomePage
+                onOpenAuth={onOpenAuth}
+                onOpenCreate={onOpenCreate}
+              />
+            }
+          />
+          <Route
+            path="/:code"
+            element={
+              <CommunityPage
+                onOpenCreate={onOpenCreate}
+                onOpenAuth={onOpenAuth}
+              />
+            }
+          />
+          <Route
+            path="/:code/manage"
+            element={<ManageCommunityPage onOpenAuth={onOpenAuth} />}
+          />
+          <Route
+            path="/:code/members"
+            element={<MemberDirectoryPage onOpenAuth={onOpenAuth} />}
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      <footer className="footer">
+        <p>Local Block MVP. Simple, private, neighbor-led.</p>
+      </footer>
+    </div>
+  );
+};
+
 const AppShell: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -63,42 +139,11 @@ const AppShell: React.FC = () => {
 
   return (
     <BrowserRouter>
-      <div className="app">
-        <Header
-          onOpenAuth={() => setShowAuth(true)}
-          onOpenCreate={() => setShowCreate(true)}
-          onOpenSignOut={() => setShowSignOutConfirm(true)}
-        />
-        <main>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <HomePage
-                  onOpenAuth={() => setShowAuth(true)}
-                  onOpenCreate={() => setShowCreate(true)}
-                />
-              }
-            />
-            <Route
-              path="/:code"
-              element={
-                <CommunityPage onOpenCreate={() => setShowCreate(true)} />
-              }
-            />
-            <Route
-              path="/:code/manage"
-              element={
-                <ManageCommunityPage onOpenAuth={() => setShowAuth(true)} />
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
-        <footer className="footer">
-          <p>Local Block MVP. Simple, private, neighbor-led.</p>
-        </footer>
-      </div>
+      <AppFrame
+        onOpenAuth={() => setShowAuth(true)}
+        onOpenCreate={() => setShowCreate(true)}
+        onOpenSignOut={() => setShowSignOutConfirm(true)}
+      />
       <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
       <CreateCommunityModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
       <ConfirmModal
