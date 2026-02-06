@@ -75,7 +75,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="alex@neighborhood.org"
+            placeholder="alex@localblock.org"
             required
           />
         </label>

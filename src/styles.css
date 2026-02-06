@@ -233,6 +233,25 @@ code {
   margin-top: 20px;
 }
 
+.flow-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.flow-list li {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.flow-list strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 input,
 textarea {
   width: 100%;

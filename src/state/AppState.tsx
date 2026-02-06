@@ -255,7 +255,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const key = normalizeCode(code);
     return (
       communities[key]?.content ||
-      "No community content yet. Ask a neighbor to add resources."
+      "No block content yet. Ask a block admin to add resources."
     );
   };
 

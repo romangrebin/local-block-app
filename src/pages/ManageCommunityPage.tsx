@@ -62,7 +62,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
       <div className="page">
         <div className="card">
           <p className="eyebrow">Loading</p>
-          <h2>Fetching community details...</h2>
+          <h2>Fetching block details...</h2>
           <p className="helper-text">Hang tight while we pull the latest info.</p>
         </div>
       </div>
@@ -73,13 +73,13 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
     return (
       <div className="page">
         <div className="card">
-          <p className="eyebrow">Community not found</p>
+          <p className="eyebrow">Block not found</p>
           <h2>
-            Community <code>{displayCode}</code> does not exist - check your
+            Block <code>{displayCode}</code> does not exist - check your
             spelling or check again with your neighbor!
           </h2>
           <p className="helper-text">
-            Community pages are private. Double check the code with your
+            Block pages are private. Double check the code with your
             neighbor.
           </p>
           <div className="cta-row">
@@ -129,30 +129,30 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
       <div className="page manage-page">
         <section className="community-header">
           <div>
-            <p className="eyebrow">Manage community</p>
-            <h1>{community.name}</h1>
-            <p className="lead">Code {community.code}</p>
-          </div>
-          <div className="action-stack">
-            <Link className="button ghost" to={`/${community.code}`}>
-              Back to community
-            </Link>
-          </div>
-        </section>
-        <div className="card warning-card">
-          <p className="eyebrow">Admin access</p>
-          <h3>Only admins can manage this community.</h3>
-          <p className="helper-text">
-            Sign in with an admin account to edit content or add organizers.
-          </p>
-          <div className="cta-row">
+          <p className="eyebrow">Manage block</p>
+          <h1>{community.name}</h1>
+          <p className="lead">Code {community.code}</p>
+        </div>
+        <div className="action-stack">
+          <Link className="button ghost" to={`/${community.code}`}>
+            Back to block page
+          </Link>
+        </div>
+      </section>
+      <div className="card warning-card">
+        <p className="eyebrow">Admin access</p>
+        <h3>Only admins can manage this block.</h3>
+        <p className="helper-text">
+          Sign in with an admin account to edit content or add organizers.
+        </p>
+        <div className="cta-row">
             {!signedIn ? (
               <button className="button" onClick={onOpenAuth}>
                 Sign in
               </button>
             ) : null}
             <Link className="button ghost" to={`/${community.code}`}>
-              Back to community
+              Back to block page
             </Link>
           </div>
         </div>
@@ -164,7 +164,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
     <div className="page manage-page">
       <section className="manage-header">
         <div>
-          <p className="eyebrow">Manage community</p>
+          <p className="eyebrow">Manage block</p>
           <h1>{community.name}</h1>
           <p className="lead">Code {community.code}</p>
         </div>
@@ -174,7 +174,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
             <span className="manage-status">Unsaved changes</span>
           ) : null}
           <Link className="button ghost" to={`/${community.code}`}>
-            Back to community
+            Back to block page
           </Link>
           <button
             className="button"
@@ -190,10 +190,8 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
       <section className="manage-grid">
         <div className="card manage-editor">
           <div>
-            <p className="section-title">Community content (markdown)</p>
-            <p className="helper-text">
-              This content appears on the public community page.
-            </p>
+            <p className="section-title">Block content (markdown)</p>
+            <p className="helper-text">This content appears on the block page.</p>
           </div>
           <textarea
             className="manage-textarea"
@@ -246,23 +244,23 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
         <div className="card manage-danger">
           <p className="section-title">Danger zone</p>
           <p className="helper-text">
-            Deleting a community permanently removes its content and admin list.
+            Deleting a block permanently removes its content and admin list.
           </p>
           <button
             className="button ghost danger"
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
           >
-            Delete community
+            Delete block
           </button>
         </div>
       </section>
 
       <ConfirmModal
         isOpen={showDeleteConfirm}
-        title="Delete this community?"
+        title="Delete this block?"
         description={`This permanently removes ${community.name} and its content.`}
-        confirmLabel={deleting ? "Deleting..." : "Delete community"}
+        confirmLabel={deleting ? "Deleting..." : "Delete block"}
         destructive
         confirmDisabled={deleting}
         onCancel={() => setShowDeleteConfirm(false)}

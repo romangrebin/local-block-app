@@ -23,7 +23,7 @@ const Header: React.FC<{
         <Link to="/" className="brand-link">
           Local Block
         </Link>
-        <span className="tag">Your block's digital bulletin board</span>
+        <span className="tag">A private landing page for your block</span>
       </div>
       <div className="nav-actions">
         {signedIn ? (
@@ -38,7 +38,7 @@ const Header: React.FC<{
         ) : null}
         {signedIn && !adminCommunityCode ? (
           <button className="button ghost" onClick={onOpenCreate}>
-            Create community
+            Create block
           </button>
         ) : null}
         {signedIn ? (

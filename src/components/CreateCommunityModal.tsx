@@ -52,14 +52,14 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
       navigate(`/${createdCode}`);
       return;
     }
-    setError("Unable to create that community. Try a different code.");
+    setError("Unable to create that block. Try a different code.");
     setSubmitting(false);
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      title="Create a community"
+      title="Create a block"
       onClose={onClose}
       footer={
         <div className="modal-actions">
@@ -69,14 +69,14 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
             form="create-community-form"
             disabled={!sanitizedCode || !canCreate || submitting}
           >
-            Create community
+            Create block
           </button>
         </div>
       }
     >
       <form id="create-community-form" className="form" onSubmit={handleSubmit}>
         <label>
-          Community name
+          Block name
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -85,7 +85,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
           />
         </label>
         <label>
-          Community code
+          Block code
           <input
             value={code}
             onChange={(event) => setCode(event.target.value)}
@@ -93,7 +93,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
             required
           />
           <span className="helper-text">
-            Your neighbors will need this code to visit the private landing page.
+            Neighbors will need this code to visit the private block page.
           </span>
           <span className="helper-text">
             Use 8+ characters to make codes harder to guess.
@@ -119,7 +119,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
         </label>
         {error ? <p className="helper-text error-text">{error}</p> : null}
         {isBlocked ? (
-          <p className="helper-text">You already admin a community.</p>
+          <p className="helper-text">You already admin a block.</p>
         ) : null}
       </form>
     </Modal>

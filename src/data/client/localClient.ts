@@ -80,7 +80,7 @@ export const createLocalClient = ({ getStore, updateStore }: LocalClientDeps): D
     input: CreateCommunityInput & { currentUserId: string }
   ): Promise<CreateCommunityResult> => {
     const code = normalizeCode(input.code);
-    if (!code) return { error: "Community code is required." };
+    if (!code) return { error: "Block code is required." };
     if (!input.currentUserId) return { error: "User not signed in." };
 
     let created = false;
@@ -116,7 +116,7 @@ export const createLocalClient = ({ getStore, updateStore }: LocalClientDeps): D
       };
     });
 
-    return created ? { code } : { error: "Unable to create community." };
+    return created ? { code } : { error: "Unable to create block." };
   },
   updateCommunity: async (code, patch) => {
     const key = normalizeCode(code);
@@ -167,13 +167,13 @@ export const createLocalClient = ({ getStore, updateStore }: LocalClientDeps): D
     updateStore((prev) => {
       const current = prev.communities[key];
       if (!current) {
-        result = { ok: false, error: "Community not found." };
+        result = { ok: false, error: "Block not found." };
         return prev;
       }
       const existingAdmin = prev.communityAdmins[adminId];
       if (existingAdmin) {
         if (existingAdmin.communityCode !== key) {
-          result = { ok: false, error: "That user already admins another community." };
+          result = { ok: false, error: "That user already admins another block." };
         }
         return prev;
       }

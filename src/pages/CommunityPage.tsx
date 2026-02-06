@@ -36,7 +36,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onOpenCreate }) =>
       <div className="page">
         <div className="card">
           <p className="eyebrow">Loading</p>
-          <h2>Fetching community details...</h2>
+          <h2>Fetching block details...</h2>
           <p className="helper-text">Hang tight while we pull the latest info.</p>
         </div>
       </div>
@@ -47,13 +47,13 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onOpenCreate }) =>
     return (
       <div className="page">
         <div className="card">
-          <p className="eyebrow">Community not found</p>
+          <p className="eyebrow">Block not found</p>
           <h2>
-            Community <code>{displayCode}</code> does not exist - check your
+            Block <code>{displayCode}</code> does not exist - check your
             spelling or check again with your neighbor!
           </h2>
           <p className="helper-text">
-            Community pages are private. Double check the code with your
+            Block pages are private. Double check the code with your
             neighbor.
           </p>
           <div className="cta-row">
@@ -73,26 +73,26 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onOpenCreate }) =>
     <div className="page">
       <section className="community-header">
         <div>
-          <p className="eyebrow">Community code</p>
+          <p className="eyebrow">Block code</p>
           <h1>{community.code}</h1>
           <p className="lead">{community.name}</p>
         </div>
         <div className="action-stack">
           {isAdmin ? (
             <Link className="button" to={`/${communityCode}/manage`}>
-              Manage community
+              Manage block
             </Link>
           ) : null}
           {canCreate ? (
             <button className="button ghost" onClick={onOpenCreate}>
-              Create another community
+              Create another block
             </button>
           ) : null}
         </div>
       </section>
       <div className="content-grid">
         <article className="card content-card">
-          <p className="eyebrow">Community resources</p>
+          <p className="eyebrow">Block resources</p>
           <div className="markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {getCommunityContent(communityCode)}
@@ -102,13 +102,13 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onOpenCreate }) =>
         <aside className="card note-card">
           <h3>Keep it neighbor-only</h3>
           <p>
-            Codes are shared offline. Encourage new neighbors to ask for the
+            Block codes are shared offline. Encourage neighbors to ask for the
             code directly.
           </p>
           <div className="divider" />
           <p className="helper-text">
             Signed-in admins can update content, add organizers, or delete the
-            community.
+            block page.
           </p>
         </aside>
       </div>
