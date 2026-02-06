@@ -69,7 +69,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     <div className="page">
       <section className="hero">
         <div>
-          <h1>Local Block</h1>
+          <h1>Your block, all in one place</h1>
           <p className="lead">
             Enter a community code to reach your neighborhood landing page with
             chats, events, and organizer info.
