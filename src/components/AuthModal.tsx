@@ -94,7 +94,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         <p className="helper-text">
           {mode === "signin"
             ? "Sign in with your email and password."
-            : "Create an account to unlock admin actions."}
+            : "Create an account to request membership or manage a community."}
         </p>
       </form>
     </Modal>

@@ -4,6 +4,7 @@ import { AppStateProvider, useAppState } from "./state/AppState";
 import { HomePage } from "./pages/HomePage";
 import { CommunityPage } from "./pages/CommunityPage";
 import { ManageCommunityPage } from "./pages/ManageCommunityPage";
+import { MemberDirectoryPage } from "./pages/MemberDirectoryPage";
 import { NotFound } from "./pages/NotFound";
 import { AuthModal } from "./components/AuthModal";
 import { CreateCommunityModal } from "./components/CreateCommunityModal";
@@ -14,8 +15,15 @@ const Header: React.FC<{
   onOpenCreate: () => void;
   onOpenSignOut: () => void;
 }> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
-  const { signedIn, adminCommunityCode, userName, getCommunity } = useAppState();
-  const adminCommunity = adminCommunityCode ? getCommunity(adminCommunityCode) : null;
+  const {
+    signedIn,
+    adminCommunityCode,
+    memberCommunityCode,
+    userName,
+    getCommunity,
+  } = useAppState();
+  const communityCode = adminCommunityCode ?? memberCommunityCode;
+  const community = communityCode ? getCommunity(communityCode) : null;
 
   return (
     <header className="topbar">
@@ -29,14 +37,15 @@ const Header: React.FC<{
         {signedIn ? (
           <div className="user-chip">
             <span>Hi {userName}</span>
-            {adminCommunityCode ? (
-              <Link className="badge link-badge" to={`/${adminCommunityCode}`}>
-                Admin of {adminCommunity?.name ?? adminCommunityCode}
+            {communityCode ? (
+              <Link className="badge link-badge" to={`/${communityCode}`}>
+                {adminCommunityCode ? "Admin" : "Member"} of{" "}
+                {community?.name ?? communityCode}
               </Link>
             ) : null}
           </div>
         ) : null}
-        {signedIn && !adminCommunityCode ? (
+        {signedIn && !memberCommunityCode ? (
           <button className="button ghost" onClick={onOpenCreate}>
             Create block
           </button>
@@ -83,13 +92,22 @@ const AppShell: React.FC = () => {
             <Route
               path="/:code"
               element={
-                <CommunityPage onOpenCreate={() => setShowCreate(true)} />
+                <CommunityPage
+                  onOpenCreate={() => setShowCreate(true)}
+                  onOpenAuth={() => setShowAuth(true)}
+                />
               }
             />
             <Route
               path="/:code/manage"
               element={
                 <ManageCommunityPage onOpenAuth={() => setShowAuth(true)} />
+              }
+            />
+            <Route
+              path="/:code/members"
+              element={
+                <MemberDirectoryPage onOpenAuth={() => setShowAuth(true)} />
               }
             />
             <Route path="*" element={<NotFound />} />

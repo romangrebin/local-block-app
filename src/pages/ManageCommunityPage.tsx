@@ -22,6 +22,9 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
     addAdmin,
     deleteCommunity,
     getCommunityAdmins,
+    getPendingMembers,
+    approveMembership,
+    denyMembership,
     getCommunity,
     isAdminFor,
     subscribeCommunity,
@@ -33,8 +36,10 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   const isAdmin = signedIn && isAdminFor(communityCode);
 
   const [content, setContent] = useState(community?.content ?? "");
+  const [memberContent, setMemberContent] = useState(community?.memberContent ?? "");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [memberError, setMemberError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -47,7 +52,9 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   useEffect(() => {
     if (!community) return;
     setContent(community.content);
+    setMemberContent(community.memberContent ?? "");
     setAdminError("");
+    setMemberError("");
     setSaved(false);
   }, [community?.code]);
 
@@ -93,12 +100,15 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   }
 
   const adminEmails = getCommunityAdmins(community.code);
-  const hasChanges = content !== community.content;
+  const pendingMembers = getPendingMembers(community.code);
+  const hasChanges =
+    content !== community.content ||
+    memberContent !== (community.memberContent ?? "");
 
   const handleSave = async () => {
     if (!community || saving) return;
     setSaving(true);
-    await updateCommunity(community.code, { content });
+    await updateCommunity(community.code, { content, memberContent });
     setSaving(false);
     setSaved(true);
   };
@@ -113,6 +123,24 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
     }
     setAdminEmail("");
     setAdminError("");
+  };
+
+  const handleApproveMember = async (userId: string) => {
+    if (!community) return;
+    setMemberError("");
+    const error = await approveMembership(community.code, userId);
+    if (error) {
+      setMemberError(error);
+    }
+  };
+
+  const handleDenyMember = async (userId: string) => {
+    if (!community) return;
+    setMemberError("");
+    const error = await denyMembership(community.code, userId);
+    if (error) {
+      setMemberError(error);
+    }
   };
 
   const handleDelete = async () => {
@@ -176,6 +204,9 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
           <Link className="button ghost" to={`/${community.code}`}>
             Back to block page
           </Link>
+          <Link className="button ghost" to={`/${community.code}/members`}>
+            Member directory
+          </Link>
           <button
             className="button"
             type="button"
@@ -215,8 +246,53 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
         </div>
       </section>
 
+      <section className="card member-editor">
+        <p className="section-title">Member-only note</p>
+        <p className="helper-text">Visible only to verified neighbors.</p>
+        <textarea
+          className="member-textarea"
+          rows={4}
+          value={memberContent}
+          onChange={(event) => {
+            setMemberContent(event.target.value);
+            if (saved) setSaved(false);
+          }}
+          placeholder="Add a short private update for members."
+        />
+      </section>
+
       <section className="manage-lower">
         <div className="card">
+          <p className="section-title">Member requests</p>
+          {pendingMembers.length ? (
+            <ul className="request-list">
+              {pendingMembers.map((member) => (
+                <li key={member.userId}>
+                  <span>{member.email}</span>
+                  <div className="inline-actions">
+                    <button
+                      className="button ghost"
+                      type="button"
+                      onClick={() => handleApproveMember(member.userId)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="button ghost danger"
+                      type="button"
+                      onClick={() => handleDenyMember(member.userId)}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="helper-text">No pending requests right now.</p>
+          )}
+          {memberError ? <p className="helper-text error-text">{memberError}</p> : null}
+          <div className="divider" />
           <p className="section-title">Admins</p>
           <ul className="admin-list">
             {adminEmails.length ? (

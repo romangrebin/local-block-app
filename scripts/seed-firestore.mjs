@@ -50,6 +50,7 @@ communityValues.forEach((community) => {
       code: community.code,
       name: community.name,
       content: community.content,
+      memberContent: community.memberContent ?? null,
       updatedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -61,36 +62,54 @@ await batch.commit();
 console.log(`Seeded ${communityValues.length} communities.`);
 
 const auth = getAuth();
-const adminLinks = seed.communityAdmins ?? {};
-const adminValues = Object.values(adminLinks);
+const memberLinks = seed.communityMembers ?? seed.communityAdmins ?? {};
+const memberValues = Object.values(memberLinks);
 
-if (!adminValues.length) {
-  console.log("No community admin links found in seed file.");
+if (!memberValues.length) {
+  console.log("No community member links found in seed file.");
   process.exit(0);
 }
 
-let seededAdmins = 0;
-for (const admin of adminValues) {
-  const email = admin?.email ?? admin?.userId;
-  const communityCode = admin?.communityCode;
+let seededMembers = 0;
+for (const member of memberValues) {
+  const email = member?.email ?? member?.userId;
+  const communityCode = member?.communityCode;
   if (!email || !communityCode) continue;
   try {
     const userRecord = await auth.getUserByEmail(email);
-    const adminRef = db.collection("communityAdmins").doc(userRecord.uid);
-    await adminRef.set(
+    const memberRef = db
+      .collection("communities")
+      .doc(communityCode)
+      .collection("members")
+      .doc(userRecord.uid);
+    await memberRef.set(
       {
         userId: userRecord.uid,
         communityCode,
         email: userRecord.email ?? email,
+        role: member?.role ?? "admin",
+        status: member?.status ?? "active",
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
-    seededAdmins += 1;
+    await db
+      .collection("users")
+      .doc(userRecord.uid)
+      .set(
+        {
+          email: userRecord.email ?? email,
+          memberCommunityCode: communityCode,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    seededMembers += 1;
   } catch (error) {
-    console.log(`Skipping admin ${email} (user not found).`);
+    console.log(`Skipping member ${email} (user not found).`);
   }
 }
 
-console.log(`Seeded ${seededAdmins} community admin links.`);
+console.log(`Seeded ${seededMembers} community members.`);

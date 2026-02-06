@@ -13,18 +13,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
   const navigate = useNavigate();
   const {
     signedIn,
-    adminCommunityCode,
+    memberCommunityCode,
     getCommunity,
     subscribeCommunity,
     isCommunityLoaded,
     firebaseEnabled,
   } = useAppState();
-  const adminCommunity = adminCommunityCode ? getCommunity(adminCommunityCode) : null;
+  const memberCommunity = memberCommunityCode ? getCommunity(memberCommunityCode) : null;
 
   useEffect(() => {
-    if (!adminCommunityCode) return;
-    return subscribeCommunity(adminCommunityCode);
-  }, [adminCommunityCode, subscribeCommunity]);
+    if (!memberCommunityCode) return;
+    return subscribeCommunity(memberCommunityCode);
+  }, [memberCommunityCode, subscribeCommunity]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -42,7 +42,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
       );
     }
 
-    if (adminCommunityCode && !isCommunityLoaded(adminCommunityCode)) {
+    if (memberCommunityCode && !isCommunityLoaded(memberCommunityCode)) {
       return (
         <button className="button ghost" type="button" disabled>
           Loading your block...
@@ -50,10 +50,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
       );
     }
 
-    if (adminCommunityCode) {
+    if (memberCommunityCode) {
       return (
-        <Link className="button ghost" to={`/${adminCommunityCode}`}>
-          Open {adminCommunity?.name ?? "your block"}
+        <Link className="button ghost" to={`/${memberCommunityCode}`}>
+          Open {memberCommunity?.name ?? "your block"}
         </Link>
       );
     }

@@ -2,22 +2,30 @@ export type Community = {
   code: string;
   name: string;
   content: string;
+  memberContent?: string;
 };
 
 export type User = {
   id: string;
   email: string;
-  adminCommunityCode: string | null;
+  memberCommunityCode: string | null;
+  adminCommunityCode?: string | null;
 };
 
-export type CommunityAdmin = {
+export type CommunityRole = "member" | "admin";
+
+export type CommunityMemberStatus = "pending" | "active";
+
+export type CommunityMember = {
   userId: string;
   communityCode: string;
   email: string;
+  role: CommunityRole;
+  status: CommunityMemberStatus;
 };
 
 export type StoreData = {
   users: Record<string, User>;
   communities: Record<string, Community>;
-  communityAdmins: Record<string, CommunityAdmin>;
+  communityMembers: Record<string, CommunityMember>;
 };

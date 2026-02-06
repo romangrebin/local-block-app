@@ -7,10 +7,12 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Community, StoreData } from "../data/models";
+import { Community, CommunityMember, StoreData } from "../data/models";
 import { normalizeCode, nameFromEmail } from "../data/normalize";
 import { CreateCommunityInput, SignInInput } from "../data/types";
 import { loadStore, saveStore } from "../data/store";
+import { DEFAULT_MEMBER_CONTENT } from "../data/constants";
+import { membershipKey } from "../data/memberships";
 import {
   isFirebaseConfigured,
   isFirebaseEnabled,
@@ -21,6 +23,7 @@ type AppState = {
   signedIn: boolean;
   userName: string;
   adminCommunityCode: string | null;
+  memberCommunityCode: string | null;
   communities: Record<string, Community>;
   firebaseEnabled: boolean;
   subscribeCommunity: (code: string) => () => void;
@@ -32,8 +35,16 @@ type AppState = {
   deleteCommunity: (code: string) => Promise<void>;
   addAdmin: (code: string, admin: string) => Promise<string | null>;
   getCommunityAdmins: (code: string) => string[];
+  getPendingMembers: (code: string) => CommunityMember[];
+  getActiveMembers: (code: string) => CommunityMember[];
   getCommunityContent: (code: string) => string;
+  getMemberContent: (code: string) => string;
   getCommunity: (code: string) => Community | null;
+  getMembershipFor: (code: string) => CommunityMember | null;
+  requestMembership: (code: string) => Promise<string | null>;
+  approveMembership: (code: string, userId: string) => Promise<string | null>;
+  denyMembership: (code: string, userId: string) => Promise<string | null>;
+  isMemberFor: (code: string) => boolean;
   isAdminFor: (code: string) => boolean;
 };
 
@@ -42,7 +53,7 @@ const AppStateContext = createContext<AppState | null>(null);
 const emptyStore: StoreData = {
   users: {},
   communities: {},
-  communityAdmins: {},
+  communityMembers: {},
 };
 
 type CommunityStatus = "idle" | "loading" | "loaded" | "missing";
@@ -57,12 +68,20 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
-  const communityAdmins = store.communityAdmins;
+  const communityMembers = store.communityMembers;
   const signedIn = firebaseEnabled ? Boolean(currentUserId) : Boolean(currentUserId && currentUser);
   const userName = currentUser?.email ? nameFromEmail(currentUser.email) : "Neighbor";
-  const adminCommunityCode = currentUserId
-    ? communityAdmins[currentUserId]?.communityCode ?? null
-    : null;
+  const memberCommunityCode = currentUser?.memberCommunityCode ?? null;
+  const adminCommunityCode = useMemo(() => {
+    if (!currentUserId) return null;
+    const adminMembership = Object.values(communityMembers).find(
+      (member) =>
+        member.userId === currentUserId &&
+        member.role === "admin" &&
+        member.status === "active"
+    );
+    return adminMembership?.communityCode ?? null;
+  }, [communityMembers, currentUserId]);
 
   const updateStore = useCallback(
     (updater: (prev: StoreData) => StoreData) => {
@@ -119,22 +138,28 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentUserId, dataClient, updateStore]);
 
   useEffect(() => {
-    if (!currentUserId || !dataClient.subscribeAdminLink) return;
-    return dataClient.subscribeAdminLink(currentUserId, (adminLink) => {
-      updateStore((prev) => {
-        const nextAdmins = { ...prev.communityAdmins };
-        if (adminLink) {
-          nextAdmins[currentUserId] = adminLink;
-        } else {
-          delete nextAdmins[currentUserId];
-        }
-        return {
-          ...prev,
-          communityAdmins: nextAdmins,
-        };
-      });
-    });
-  }, [currentUserId, dataClient, updateStore]);
+    if (!currentUserId || !memberCommunityCode) return;
+    if (!dataClient.subscribeMembership) return;
+    return dataClient.subscribeMembership(
+      memberCommunityCode,
+      currentUserId,
+      (member) => {
+        updateStore((prev) => {
+          const nextMembers = { ...prev.communityMembers };
+          const key = membershipKey(memberCommunityCode, currentUserId);
+          if (member) {
+            nextMembers[key] = member;
+          } else {
+            delete nextMembers[key];
+          }
+          return {
+            ...prev,
+            communityMembers: nextMembers,
+          };
+        });
+      }
+    );
+  }, [currentUserId, dataClient, memberCommunityCode, updateStore]);
 
   const subscribeCommunity = useCallback(
     (code: string) => {
@@ -163,23 +188,41 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }));
       });
 
-      const shouldLoadAdmins =
-        dataClient.kind === "local" || adminCommunityCode === key;
-      const unsubscribeAdmins = shouldLoadAdmins
-        ? dataClient.subscribeCommunityAdmins(key, (admins) => {
+      const unsubscribeMembership = currentUserId
+        ? dataClient.subscribeMembership(key, currentUserId, (member) => {
             updateStore((prev) => {
-              const nextAdmins = { ...prev.communityAdmins };
-              Object.values(nextAdmins).forEach((admin) => {
-                if (admin.communityCode === key) {
-                  delete nextAdmins[admin.userId];
+              const nextMembers = { ...prev.communityMembers };
+              const id = membershipKey(key, currentUserId);
+              if (member) {
+                nextMembers[id] = member;
+              } else {
+                delete nextMembers[id];
+              }
+              return {
+                ...prev,
+                communityMembers: nextMembers,
+              };
+            });
+          })
+        : () => {};
+
+      const shouldLoadMembers =
+        dataClient.kind === "local" || adminCommunityCode === key;
+      const unsubscribeMembers = shouldLoadMembers
+        ? dataClient.subscribeCommunityMembers(key, (members) => {
+            updateStore((prev) => {
+              const nextMembers = { ...prev.communityMembers };
+              Object.values(nextMembers).forEach((member) => {
+                if (member.communityCode === key) {
+                  delete nextMembers[membershipKey(member.communityCode, member.userId)];
                 }
               });
-              admins.forEach((admin) => {
-                nextAdmins[admin.userId] = admin;
+              members.forEach((member) => {
+                nextMembers[membershipKey(member.communityCode, member.userId)] = member;
               });
               return {
                 ...prev,
-                communityAdmins: nextAdmins,
+                communityMembers: nextMembers,
               };
             });
           })
@@ -187,10 +230,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return () => {
         unsubscribeCommunity();
-        unsubscribeAdmins();
+        unsubscribeMembership();
+        unsubscribeMembers();
       };
     },
-    [adminCommunityCode, dataClient, updateStore]
+    [adminCommunityCode, currentUserId, dataClient, updateStore]
   );
 
   const isCommunityLoaded = useCallback(
@@ -221,7 +265,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const createCommunity = async (input: CreateCommunityInput) => {
     if (!currentUserId) return null;
-    if (adminCommunityCode) return null;
+    if (memberCommunityCode) return null;
     const result = await dataClient.createCommunity({
       ...input,
       currentUserId,
@@ -245,10 +289,35 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getCommunityAdmins = (code: string) => {
     const key = normalizeCode(code);
     if (!key) return [];
-    return Object.values(communityAdmins)
-      .filter((admin) => admin.communityCode === key)
-      .map((admin) => admin.email)
+    return Object.values(communityMembers)
+      .filter(
+        (member) =>
+          member.communityCode === key &&
+          member.role === "admin" &&
+          member.status === "active"
+      )
+      .map((member) => member.email)
       .sort();
+  };
+
+  const getPendingMembers = (code: string) => {
+    const key = normalizeCode(code);
+    if (!key) return [];
+    return Object.values(communityMembers)
+      .filter(
+        (member) => member.communityCode === key && member.status === "pending"
+      )
+      .sort((a, b) => a.email.localeCompare(b.email));
+  };
+
+  const getActiveMembers = (code: string) => {
+    const key = normalizeCode(code);
+    if (!key) return [];
+    return Object.values(communityMembers)
+      .filter(
+        (member) => member.communityCode === key && member.status === "active"
+      )
+      .sort((a, b) => a.email.localeCompare(b.email));
   };
 
   const getCommunityContent = (code: string) => {
@@ -259,14 +328,48 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   };
 
+  const getMemberContent = (code: string) => {
+    const key = normalizeCode(code);
+    return communities[key]?.memberContent || DEFAULT_MEMBER_CONTENT;
+  };
+
   const getCommunity = (code: string) => {
     const key = normalizeCode(code);
     return communities[key] ?? null;
   };
 
-  const isAdminFor = (code: string) => {
+  const getMembershipFor = (code: string) => {
     const key = normalizeCode(code);
-    return key === adminCommunityCode;
+    if (!key || !currentUserId) return null;
+    return communityMembers[membershipKey(key, currentUserId)] ?? null;
+  };
+
+  const requestMembership = async (code: string) => {
+    if (!currentUserId) return "User not signed in.";
+    const result = await dataClient.requestMembership(code, currentUserId);
+    return result.ok ? null : result.error ?? "Unable to request membership.";
+  };
+
+  const approveMembership = async (code: string, userId: string) => {
+    const result = await dataClient.approveMembership(code, userId);
+    return result.ok ? null : result.error ?? "Unable to approve member.";
+  };
+
+  const denyMembership = async (code: string, userId: string) => {
+    const result = await dataClient.denyMembership(code, userId);
+    return result.ok ? null : result.error ?? "Unable to deny member.";
+  };
+
+  const isMemberFor = (code: string) => {
+    const membership = getMembershipFor(code);
+    return Boolean(membership && membership.status === "active");
+  };
+
+  const isAdminFor = (code: string) => {
+    const membership = getMembershipFor(code);
+    return Boolean(
+      membership && membership.status === "active" && membership.role === "admin"
+    );
   };
 
   return (
@@ -275,6 +378,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         signedIn,
         userName,
         adminCommunityCode,
+        memberCommunityCode,
         communities,
         firebaseEnabled,
         subscribeCommunity,
@@ -286,8 +390,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deleteCommunity,
         addAdmin,
         getCommunityAdmins,
+        getPendingMembers,
+        getActiveMembers,
         getCommunityContent,
+        getMemberContent,
         getCommunity,
+        getMembershipFor,
+        requestMembership,
+        approveMembership,
+        denyMembership,
+        isMemberFor,
         isAdminFor,
       }}
     >

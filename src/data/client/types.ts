@@ -1,4 +1,4 @@
-import type { Community, CommunityAdmin, User } from "../models";
+import type { Community, CommunityMember, User } from "../models";
 import type { CreateCommunityInput, SignInInput } from "../types";
 
 export type SignInResult = {
@@ -16,6 +16,11 @@ export type AddAdminResult = {
   error?: string;
 };
 
+export type MembershipResult = {
+  ok: boolean;
+  error?: string;
+};
+
 export type DataClient = {
   kind: "firebase" | "local";
   connect: () => void;
@@ -25,13 +30,14 @@ export type DataClient = {
     code: string,
     callback: (community: Community | null) => void
   ) => () => void;
-  subscribeAdminLink: (
-    userId: string,
-    callback: (admin: CommunityAdmin | null) => void
-  ) => () => void;
-  subscribeCommunityAdmins: (
+  subscribeCommunityMembers: (
     code: string,
-    callback: (admins: CommunityAdmin[]) => void
+    callback: (members: CommunityMember[]) => void
+  ) => () => void;
+  subscribeMembership: (
+    code: string,
+    userId: string,
+    callback: (member: CommunityMember | null) => void
   ) => () => void;
   signIn: (input: SignInInput) => Promise<SignInResult>;
   signOut: () => Promise<void>;
@@ -41,4 +47,16 @@ export type DataClient = {
   updateCommunity: (code: string, patch: Partial<Community>) => Promise<void>;
   deleteCommunity: (code: string, currentUserId?: string) => Promise<void>;
   addAdmin: (code: string, adminEmail: string) => Promise<AddAdminResult>;
+  requestMembership: (
+    code: string,
+    currentUserId: string
+  ) => Promise<MembershipResult>;
+  approveMembership: (
+    code: string,
+    userId: string
+  ) => Promise<MembershipResult>;
+  denyMembership: (
+    code: string,
+    userId: string
+  ) => Promise<MembershipResult>;
 };

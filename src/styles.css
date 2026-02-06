@@ -358,6 +358,12 @@ textarea:focus {
   gap: 20px;
 }
 
+.directory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
 .content-card {
   min-height: 320px;
 }
@@ -399,6 +405,10 @@ textarea:focus {
   background: #fef9f1;
 }
 
+.member-card {
+  background: #f4faf7;
+}
+
 .warning-card {
   border: 1px solid rgba(209, 124, 31, 0.4);
   background: #fff7ed;
@@ -430,6 +440,44 @@ textarea:focus {
   margin: 0 0 12px;
   display: grid;
   gap: 6px;
+}
+
+.member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.member-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.request-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.request-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .inline-form {
@@ -486,6 +534,17 @@ textarea:focus {
 .manage-editor {
   display: grid;
   gap: 12px;
+}
+
+.member-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.member-textarea {
+  min-height: 120px;
+  line-height: 1.6;
+  resize: vertical;
 }
 
 .manage-textarea {

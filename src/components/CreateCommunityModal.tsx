@@ -13,7 +13,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { createCommunity, adminCommunityCode, getCommunity } = useAppState();
+  const { createCommunity, memberCommunityCode, getCommunity } = useAppState();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [content, setContent] = useState("");
@@ -22,7 +22,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   const navigate = useNavigate();
 
   const sanitizedCode = useMemo(() => toCommunitySlug(code), [code]);
-  const isBlocked = Boolean(adminCommunityCode);
+  const isBlocked = Boolean(memberCommunityCode);
   const existingCommunity = sanitizedCode ? getCommunity(sanitizedCode) : null;
   const hasInvalidChars = Boolean(code) && sanitizedCode !== code;
   const canCreate = !isBlocked && !existingCommunity && !hasInvalidChars;
@@ -119,7 +119,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
         </label>
         {error ? <p className="helper-text error-text">{error}</p> : null}
         {isBlocked ? (
-          <p className="helper-text">You already admin a block.</p>
+          <p className="helper-text">You already belong to a block.</p>
         ) : null}
       </form>
     </Modal>

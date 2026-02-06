@@ -1,48 +1,75 @@
 import seedData from "./db.json";
-import { StoreData } from "./models";
+import { CommunityMember, StoreData, User } from "./models";
+import { membershipKey } from "./memberships";
 
 const STORAGE_KEY = "local-block-data";
 
 const isBrowser = () => typeof window !== "undefined";
 
-const ensureStoreShape = (data: Partial<StoreData>): StoreData => {
+const ensureStoreShape = (data: Partial<StoreData> & { communityAdmins?: Record<string, any> }): StoreData => {
   const users = data.users ?? {};
   const communities = data.communities ?? {};
-  const existingAdmins = data.communityAdmins ?? {};
-  let communityAdmins = existingAdmins;
+  const existingMembers = data.communityMembers ?? {};
+  let communityMembers = existingMembers;
 
-  if (!Object.keys(existingAdmins).length) {
-    const derivedAdmins: StoreData["communityAdmins"] = {};
-    Object.values(users).forEach((user) => {
-      if (user.adminCommunityCode) {
-        derivedAdmins[user.id] = {
-          userId: user.id,
-          communityCode: user.adminCommunityCode,
-          email: user.email,
-        };
-      }
+  if (!Object.keys(existingMembers).length) {
+    const derivedMembers: StoreData["communityMembers"] = {};
+    const legacyAdmins = data.communityAdmins ?? {};
+
+    Object.values(legacyAdmins).forEach((admin: any) => {
+      const member: CommunityMember = {
+        userId: admin.userId,
+        communityCode: admin.communityCode,
+        email: admin.email,
+        role: "admin",
+        status: "active",
+      };
+      derivedMembers[membershipKey(admin.communityCode, admin.userId)] = member;
     });
 
-    if (!Object.keys(derivedAdmins).length) {
+    if (!Object.keys(derivedMembers).length) {
       Object.values(communities).forEach((community) => {
         const admins = (community as { admins?: string[] }).admins ?? [];
         admins.forEach((email) => {
-          derivedAdmins[email] = {
+          const member: CommunityMember = {
             userId: email,
             communityCode: community.code,
             email,
+            role: "admin",
+            status: "active",
           };
+          derivedMembers[membershipKey(community.code, email)] = member;
         });
       });
     }
 
-    communityAdmins = derivedAdmins;
+    communityMembers = derivedMembers;
   }
 
+  const normalizedUsers: Record<string, User> = {};
+  Object.entries(users).forEach(([id, user]) => {
+    const memberCommunityCode =
+      user.memberCommunityCode ?? user.adminCommunityCode ?? null;
+    normalizedUsers[id] = {
+      ...user,
+      memberCommunityCode: memberCommunityCode ?? null,
+    };
+  });
+
+  Object.values(communityMembers).forEach((member) => {
+    const existing = normalizedUsers[member.userId];
+    if (existing && !existing.memberCommunityCode) {
+      normalizedUsers[member.userId] = {
+        ...existing,
+        memberCommunityCode: member.communityCode,
+      };
+    }
+  });
+
   return {
-    users,
+    users: normalizedUsers,
     communities,
-    communityAdmins,
+    communityMembers,
   };
 };
 

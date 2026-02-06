@@ -5,4 +5,5 @@ export type {
   CreateCommunityResult,
   SignInResult,
   AddAdminResult,
+  MembershipResult,
 } from "./types";
