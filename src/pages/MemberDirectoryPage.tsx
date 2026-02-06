@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CommunityHeader } from "../components/CommunityHeader";
 import { useAppState } from "../state/AppState";
 import { toCommunitySlug } from "../data/normalize";
 
@@ -90,18 +91,16 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
   if (!isAdmin) {
     return (
       <div className="page manage-page">
-        <section className="community-header">
-          <div>
-            <p className="eyebrow">Member directory</p>
-            <h1>{community.name}</h1>
-            <p className="lead">Code {community.code}</p>
-          </div>
-          <div className="action-stack">
+        <CommunityHeader
+          community={community}
+          active="members"
+          showAdminTabs={false}
+          actions={
             <Link className="button ghost" to={`/${community.code}`}>
               Back to community
             </Link>
-          </div>
-        </section>
+          }
+        />
         <div className="card warning-card">
           <p className="eyebrow">Admin access</p>
           <h3>Only admins can manage members.</h3>
@@ -125,21 +124,7 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
 
   return (
     <div className="page">
-      <section className="manage-header">
-        <div>
-          <p className="eyebrow">Member directory</p>
-          <h1>{community.name}</h1>
-          <p className="lead">Code {community.code}</p>
-        </div>
-        <div className="manage-actions">
-          <Link className="button ghost" to={`/${community.code}`}>
-            Back to community
-          </Link>
-          <Link className="button" to={`/${community.code}/manage`}>
-            Manage community
-          </Link>
-        </div>
-      </section>
+      <CommunityHeader community={community} active="members" showAdminTabs />
 
       <section className="directory-grid">
         <div className="card">

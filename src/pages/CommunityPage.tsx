@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAppState } from "../state/AppState";
 import { toCommunitySlug } from "../data/normalize";
+import { CommunityHeader } from "../components/CommunityHeader";
 
 type CommunityPageProps = {
   onOpenCreate: () => void;
@@ -97,30 +98,18 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
 
   return (
     <div className="page">
-      <section className="community-header">
-        <div>
-          <p className="eyebrow">Block code</p>
-          <h1>{community.code}</h1>
-          <p className="lead">{community.name}</p>
-        </div>
-        <div className="action-stack">
-          {isAdmin ? (
-            <Link className="button" to={`/${communityCode}/manage`}>
-              Manage block
-            </Link>
-          ) : null}
-          {isAdmin ? (
-            <Link className="button ghost" to={`/${communityCode}/members`}>
-              Member directory
-            </Link>
-          ) : null}
-          {canCreate ? (
+      <CommunityHeader
+        community={community}
+        active="overview"
+        showAdminTabs={isAdmin}
+        actions={
+          canCreate ? (
             <button className="button ghost" onClick={onOpenCreate}>
-              Create another block
+              Create a block
             </button>
-          ) : null}
-        </div>
-      </section>
+          ) : null
+        }
+      />
       <div className="content-grid">
         <article className="card content-card">
           <p className="eyebrow">Block resources</p>

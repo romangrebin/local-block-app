@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+} from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state/AppState";
 import { HomePage } from "./pages/HomePage";
 import { CommunityPage } from "./pages/CommunityPage";
@@ -64,6 +70,67 @@ const Header: React.FC<{
   );
 };
 
+const AppFrame: React.FC<{
+  onOpenAuth: () => void;
+  onOpenCreate: () => void;
+  onOpenSignOut: () => void;
+}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
+  const location = useLocation();
+  const { signedIn } = useAppState();
+  const isPublic = location.pathname === "/";
+  const appClassName = [
+    "app",
+    isPublic ? "app-public" : "app-community",
+    signedIn ? "signed-in" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className={appClassName}>
+      <Header
+        onOpenAuth={onOpenAuth}
+        onOpenCreate={onOpenCreate}
+        onOpenSignOut={onOpenSignOut}
+      />
+      <main className={`main-shell ${isPublic ? "main-public" : "main-community"}`}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <HomePage
+                onOpenAuth={onOpenAuth}
+                onOpenCreate={onOpenCreate}
+              />
+            }
+          />
+          <Route
+            path="/:code"
+            element={
+              <CommunityPage
+                onOpenCreate={onOpenCreate}
+                onOpenAuth={onOpenAuth}
+              />
+            }
+          />
+          <Route
+            path="/:code/manage"
+            element={<ManageCommunityPage onOpenAuth={onOpenAuth} />}
+          />
+          <Route
+            path="/:code/members"
+            element={<MemberDirectoryPage onOpenAuth={onOpenAuth} />}
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      <footer className="footer">
+        <p>Local Block MVP. Simple, private, neighbor-led.</p>
+      </footer>
+    </div>
+  );
+};
+
 const AppShell: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -72,51 +139,11 @@ const AppShell: React.FC = () => {
 
   return (
     <BrowserRouter>
-      <div className="app">
-        <Header
-          onOpenAuth={() => setShowAuth(true)}
-          onOpenCreate={() => setShowCreate(true)}
-          onOpenSignOut={() => setShowSignOutConfirm(true)}
-        />
-        <main>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <HomePage
-                  onOpenAuth={() => setShowAuth(true)}
-                  onOpenCreate={() => setShowCreate(true)}
-                />
-              }
-            />
-            <Route
-              path="/:code"
-              element={
-                <CommunityPage
-                  onOpenCreate={() => setShowCreate(true)}
-                  onOpenAuth={() => setShowAuth(true)}
-                />
-              }
-            />
-            <Route
-              path="/:code/manage"
-              element={
-                <ManageCommunityPage onOpenAuth={() => setShowAuth(true)} />
-              }
-            />
-            <Route
-              path="/:code/members"
-              element={
-                <MemberDirectoryPage onOpenAuth={() => setShowAuth(true)} />
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
-        <footer className="footer">
-          <p>Local Block MVP. Simple, private, neighbor-led.</p>
-        </footer>
-      </div>
+      <AppFrame
+        onOpenAuth={() => setShowAuth(true)}
+        onOpenCreate={() => setShowCreate(true)}
+        onOpenSignOut={() => setShowSignOutConfirm(true)}
+      />
       <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
       <CreateCommunityModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
       <ConfirmModal
