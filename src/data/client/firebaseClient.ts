@@ -234,6 +234,7 @@ export const createFirebaseClient = (): DataClient => ({
     });
   },
   deleteCommunity: async (code, currentUserId) => {
+    void currentUserId;
     const key = normalizeCode(code);
     if (!key) return;
     const db = getFirebaseDb();
