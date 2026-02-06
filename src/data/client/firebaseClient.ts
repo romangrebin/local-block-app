@@ -156,13 +156,13 @@ export const createFirebaseClient = (): DataClient => ({
     input: CreateCommunityInput & { currentUserId: string }
   ): Promise<CreateCommunityResult> => {
     const code = normalizeCode(input.code);
-    if (!code) return { error: "Community code is required." };
+    if (!code) return { error: "Block code is required." };
     if (!input.currentUserId) return { error: "User not signed in." };
 
     const db = getFirebaseDb();
     const communityRef = doc(db, "communities", code);
     const communitySnap = await getDoc(communityRef);
-    if (communitySnap.exists()) return { error: "Community already exists." };
+    if (communitySnap.exists()) return { error: "Block already exists." };
 
     const userRef = doc(db, "users", input.currentUserId);
     const userSnap = await getDoc(userRef);
@@ -172,7 +172,7 @@ export const createFirebaseClient = (): DataClient => ({
     if (!userEmail) return { error: "User email missing." };
     const adminRef = doc(db, "communityAdmins", input.currentUserId);
     const adminSnap = await getDoc(adminRef);
-    if (adminSnap.exists()) return { error: "User already admins a community." };
+    if (adminSnap.exists()) return { error: "User already admins a block." };
 
     const nextCommunity: Community = {
       code,
@@ -254,7 +254,7 @@ export const createFirebaseClient = (): DataClient => ({
     if (adminSnap.exists()) {
       const data = adminSnap.data() as CommunityAdmin;
       if (data.communityCode !== key) {
-        return { ok: false, error: "That user already admins another community." };
+        return { ok: false, error: "That user already admins another block." };
       }
       return { ok: true };
     }

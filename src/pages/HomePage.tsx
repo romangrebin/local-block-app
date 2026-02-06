@@ -37,7 +37,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     if (!signedIn) {
       return (
         <button className="button ghost" onClick={onOpenAuth}>
-          Sign up to create your own
+          Sign in to create a community
         </button>
       );
     }
@@ -45,7 +45,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     if (adminCommunityCode && !isCommunityLoaded(adminCommunityCode)) {
       return (
         <button className="button ghost" type="button" disabled>
-          Loading your community...
+          Loading your block...
         </button>
       );
     }
@@ -53,14 +53,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     if (adminCommunityCode) {
       return (
         <Link className="button ghost" to={`/${adminCommunityCode}`}>
-          Go to {adminCommunity?.name ?? "your community"}
+          Open {adminCommunity?.name ?? "your block"}
         </Link>
       );
     }
 
     return (
       <button className="button ghost" onClick={onOpenCreate}>
-        Create new community
+        Create a block
       </button>
     );
   };
@@ -69,32 +69,38 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
     <div className="page">
       <section className="hero">
         <div>
-          <h1>Your block, all in one place</h1>
+          <h1>Your block's private landing page</h1>
           <p className="lead">
-            Enter a community code to reach your neighborhood landing page with
-            chats, events, and organizer info.
+            Use a code to open your block page with chats, events, and organizer info.
           </p>
+          <ul className="flow-list">
+            <li>
+              <strong>Have a code?</strong> Enter it below. No sign-in needed.
+            </li>
+            <li>
+              <strong>Need a code?</strong> Ask a neighbor, or sign in to create a community.
+            </li>
+          </ul>
           <form className="code-form" onSubmit={handleSubmit}>
             <input
               value={code}
               onChange={(event) => setCode(event.target.value)}
-              placeholder="Enter community code"
-              aria-label="Community code"
+              placeholder="Enter block code"
+              aria-label="Block code"
             />
             <button className="button" type="submit">
-              Open community
+              Open block page
             </button>
           </form>
           <p className="helper-text">
-            Community codes are shared neighbor-to-neighbor and are not indexed
-            publicly.
+            Codes are shared neighbor-to-neighbor and are not listed or searchable.
           </p>
         </div>
         <div className="card showcase">
           {!firebaseEnabled ? (
             <>
-              <h3>Demo communities</h3>
-              <p>Use these sample codes to explore the MVP.</p>
+              <h3>Demo blocks</h3>
+              <p>Use these sample codes to preview a block page.</p>
               <div className="pill-row">
                 <Link className="pill" to="/maple-hill">
                   maple-hill
@@ -106,10 +112,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
             </>
           ) : (
             <>
-              <h3>Need a community code?</h3>
+              <h3>Need a code?</h3>
               <p>
-                Codes are shared neighbor-to-neighbor. Ask someone nearby or
-                create a new community to get started.
+                Ask a neighbor for your block's code, or sign in to create a community and get
+                one.
               </p>
             </>
           )}
