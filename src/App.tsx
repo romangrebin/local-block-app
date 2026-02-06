@@ -23,7 +23,7 @@ const Header: React.FC<{
         <Link to="/" className="brand-link">
           Local Block
         </Link>
-        <span className="tag">Private neighborhood front doors</span>
+        <span className="tag">Your block's digital bulletin board</span>
       </div>
       <div className="nav-actions">
         {signedIn ? (
