@@ -43,17 +43,17 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
     if (isBlocked) return;
     setSubmitting(true);
     setError("");
-    const createdCode = await createCommunity({
+    const result = await createCommunity({
       code: sanitizedCode,
       name,
       content,
     });
-    if (createdCode) {
+    if (result.code) {
       onClose();
-      navigate(`/${createdCode}`);
+      navigate(`/${result.code}`);
       return;
     }
-    setError("Unable to create that block. Try a different code.");
+    setError(result.error ?? "Unable to create that block. Try a different code.");
     setSubmitting(false);
   };
 

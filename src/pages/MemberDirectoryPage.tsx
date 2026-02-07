@@ -30,6 +30,7 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
   const isAdmin = signedIn && isAdminFor(communityCode);
   const pendingMembers = getPendingMembers(communityCode);
   const activeMembers = getActiveMembers(communityCode);
+  const pendingCount = isAdmin ? pendingMembers.length : 0;
 
   const [memberError, setMemberError] = useState("");
 
@@ -132,7 +133,12 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
 
   return (
     <div className="page">
-      <CommunityHeader community={community} active="members" showAdminTabs />
+      <CommunityHeader
+        community={community}
+        active="members"
+        showAdminTabs
+        pendingCount={pendingCount}
+      />
 
       <section className="directory-grid">
         <div className="card">

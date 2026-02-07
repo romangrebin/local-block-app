@@ -447,6 +447,23 @@ textarea:focus {
   transition: all 0.2s ease;
 }
 
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 6px 12px rgba(15, 118, 110, 0.25);
+}
+
 .tab-link:hover {
   border-color: rgba(15, 118, 110, 0.35);
   color: var(--accent-dark);
@@ -457,6 +474,12 @@ textarea:focus {
   border-color: var(--accent);
   color: #ffffff;
   box-shadow: 0 12px 20px rgba(15, 118, 110, 0.2);
+}
+
+.tab-link.active .tab-badge {
+  background: #ffffff;
+  color: var(--accent-dark);
+  box-shadow: none;
 }
 
 .page-commands {

@@ -56,11 +56,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).changedKeys()
           .hasOnly(["pendingCommunityCode", "updatedAt"])
         && request.resource.data.memberCommunityCode == resource.data.memberCommunityCode
-        && resource.data.memberCommunityCode == null
-        && resource.data.pendingCommunityCode == null
-        && request.resource.data.pendingCommunityCode is string
-        && exists(/databases/$(database)/documents/communities/$(request.resource.data.pendingCommunityCode)/members/$(userId))
-        && memberDoc(request.resource.data.pendingCommunityCode, userId).data.status == "pending";
+        && request.resource.data.pendingCommunityCode is string;
     }
 
     match /communities/{communityId} {
@@ -79,35 +75,35 @@ service cloud.firestore {
         allow get: if isSignedIn() && (
           request.auth.uid == userId
           || isAdminFor(communityId)
+          || (
+            isActiveMember(communityId, request.auth.uid)
+            && resource.data.role == "admin"
+            && resource.data.status == "active"
+          )
         );
         allow list: if isAdminFor(communityId);
         allow create: if isSignedIn()
           && request.resource.data.userId == userId
           && request.resource.data.communityCode == communityId
-          && request.resource.data.email is string
           && exists(/databases/$(database)/documents/communities/$(communityId))
           && (
-            userCommunityCode(userId) == null
-            || userCommunityCode(userId) == communityId
-          )
-          && (
-            (
-              request.auth.uid == userId
-              && request.resource.data.role == "member"
-              && request.resource.data.status == "pending"
-              && request.resource.data.email == request.auth.token.email
-            )
+            request.auth.uid == userId
             || (
               isAdminFor(communityId)
               && request.resource.data.status == "active"
             )
-            || (
-              request.auth.uid == userId
-              && communityDoc(communityId).data.createdBy == userId
-              && request.resource.data.role == "admin"
-              && request.resource.data.status == "active"
-              && request.resource.data.email == request.auth.token.email
-            )
+          )
+          && (
+            request.resource.data.role == "member"
+            || request.resource.data.role == "admin"
+          )
+          && (
+            request.resource.data.role != "admin"
+            || communityDoc(communityId).data.createdBy == userId
+          )
+          && (
+            request.resource.data.status == "pending"
+            || request.resource.data.status == "active"
           );
         allow update: if isAdminFor(communityId)
           && request.resource.data.userId == userId
@@ -123,10 +119,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow create: if isSignedIn()
-        && request.auth.uid == userId
-        && request.resource.data.email == request.auth.token.email;
+        && request.auth.uid == userId;
       allow update: if isSignedIn()
-        && request.resource.data.email == resource.data.email
         && (
           selfSetsPendingCommunity(userId)
           || (

@@ -25,11 +25,15 @@ type AppState = {
   isCommunityLoaded: (code: string) => boolean;
   signIn: (input: SignInInput) => Promise<string | null>;
   signOut: () => Promise<void>;
-  createCommunity: (input: CreateCommunityInput) => Promise<string | null>;
+  createCommunity: (
+    input: CreateCommunityInput
+  ) => Promise<{ code?: string; error?: string }>;
   updateCommunity: (code: string, patch: Partial<Community>) => Promise<void>;
   deleteCommunity: (code: string) => Promise<void>;
   addAdmin: (code: string, admin: string) => Promise<string | null>;
   getCommunityAdmins: (code: string) => string[];
+  getAdminContactEmail: (code: string) => string | null;
+  subscribeAdminContact: (code: string, adminId?: string | null) => () => void;
   getPendingMembers: (code: string) => CommunityMember[];
   getActiveMembers: (code: string) => CommunityMember[];
   getCommunityContent: (code: string) => string;
@@ -57,6 +61,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [store, setStore] = useState<StoreData>(emptyStore);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [communityStatus, setCommunityStatus] = useState<Record<string, CommunityStatus>>({});
+  const [adminContacts, setAdminContacts] = useState<Record<string, string>>({});
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
@@ -240,13 +245,15 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const createCommunity = async (input: CreateCommunityInput) => {
-    if (!currentUserId) return null;
-    if (memberCommunityCode || pendingCommunityCode) return null;
+    if (!currentUserId) return { error: "User not signed in." };
+    if (memberCommunityCode || pendingCommunityCode) {
+      return { error: "You already belong to a block." };
+    }
     const result = await dataClient.createCommunity({
       ...input,
       currentUserId,
     });
-    return result.code ?? null;
+    return result;
   };
 
   const updateCommunity = async (code: string, patch: Partial<Community>) => {
@@ -275,6 +282,39 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .map((member) => member.email)
       .sort();
   };
+
+  const getAdminContactEmail = useCallback(
+    (code: string) => {
+      const key = normalizeCode(code);
+      if (!key) return null;
+      return adminContacts[key] ?? null;
+    },
+    [adminContacts]
+  );
+
+  const subscribeAdminContact = useCallback(
+    (code: string, adminId?: string | null) => {
+      const key = normalizeCode(code);
+      if (!key || !adminId) return () => {};
+      if (!dataClient.subscribeMembership) return () => {};
+      return dataClient.subscribeMembership(key, adminId, (member) => {
+        setAdminContacts((prev) => {
+          if (!member || member.role !== "admin" || member.status !== "active") {
+            if (!(key in prev)) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          }
+          if (prev[key] === member.email) return prev;
+          return {
+            ...prev,
+            [key]: member.email,
+          };
+        });
+      });
+    },
+    [dataClient]
+  );
 
   const getPendingMembers = (code: string) => {
     const key = normalizeCode(code);
@@ -366,6 +406,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deleteCommunity,
         addAdmin,
         getCommunityAdmins,
+        getAdminContactEmail,
+        subscribeAdminContact,
         getPendingMembers,
         getActiveMembers,
         getCommunityContent,

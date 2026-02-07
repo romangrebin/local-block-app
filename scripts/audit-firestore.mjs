@@ -48,6 +48,7 @@ const deprecatedCommunityFields = new Set([
   "adminEmails",
   "communityAdmins",
   "communityMembers",
+  "contactEmail",
 ]);
 
 const allowedMemberFields = new Set([

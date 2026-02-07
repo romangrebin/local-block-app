@@ -23,6 +23,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
     addAdmin,
     deleteCommunity,
     getCommunityAdmins,
+    getPendingMembers,
     getCommunity,
     isAdminFor,
     subscribeCommunity,
@@ -32,6 +33,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   const community = getCommunity(communityCode);
   const communityLoaded = isCommunityLoaded(communityCode);
   const isAdmin = signedIn && isAdminFor(communityCode);
+  const pendingCount = isAdmin ? getPendingMembers(communityCode).length : 0;
 
   const [content, setContent] = useState(community?.content ?? "");
   const [memberContent, setMemberContent] = useState(community?.memberContent ?? "");
@@ -170,6 +172,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
         community={community}
         active="manage"
         showAdminTabs
+        pendingCount={pendingCount}
         actions={
           <>
             {saved ? <span className="manage-status">Saved</span> : null}

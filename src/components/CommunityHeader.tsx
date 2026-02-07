@@ -6,6 +6,7 @@ type CommunityHeaderProps = {
   community: Community;
   active: "overview" | "manage" | "members";
   showAdminTabs?: boolean;
+  pendingCount?: number;
   actions?: React.ReactNode;
 };
 
@@ -13,8 +14,10 @@ export const CommunityHeader: React.FC<CommunityHeaderProps> = ({
   community,
   active,
   showAdminTabs = false,
+  pendingCount = 0,
   actions,
 }) => {
+  const showPending = pendingCount > 0;
   return (
     <section className="page-header">
       <div className="page-title">
@@ -42,6 +45,16 @@ export const CommunityHeader: React.FC<CommunityHeaderProps> = ({
               to={`/${community.code}/members`}
             >
               Members
+              {showPending ? (
+                <span
+                  className="tab-badge"
+                  aria-label={`${pendingCount} pending request${
+                    pendingCount === 1 ? "" : "s"
+                  }`}
+                >
+                  {pendingCount}
+                </span>
+              ) : null}
             </Link>
           </div>
         ) : null}

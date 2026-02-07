@@ -53,6 +53,20 @@ const ensureUserDoc = async (userId: string, email: string) => {
   }
 };
 
+const getAuthEmail = () => {
+  const auth = getFirebaseAuth();
+  return auth.currentUser?.email ?? "";
+};
+
+const ensureAuthToken = async () => {
+  const auth = getFirebaseAuth();
+  if (!auth.currentUser) return;
+  try {
+    await auth.currentUser.getIdToken(true);
+  } catch {
+    // Ignore token refresh errors; request will fail if auth is invalid.
+  }
+};
 export const createFirebaseClient = (): DataClient => ({
   kind: "firebase",
   connect: () => {
@@ -179,6 +193,7 @@ export const createFirebaseClient = (): DataClient => ({
     if (!code) return { error: "Block code is required." };
     if (!input.currentUserId) return { error: "User not signed in." };
 
+    await ensureAuthToken();
     const db = getFirebaseDb();
     const communityRef = doc(db, "communities", code);
     const communitySnap = await getDoc(communityRef);
@@ -188,8 +203,11 @@ export const createFirebaseClient = (): DataClient => ({
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) return { error: "User not found." };
     const userData = userSnap.data() as User;
+    const authEmail = getAuthEmail();
     const userEmail = userData.email ?? "";
+    const memberEmail = authEmail || userEmail;
     if (!userEmail) return { error: "User email missing." };
+    if (!memberEmail) return { error: "Auth email missing." };
     const userCommunityCode =
       userData.memberCommunityCode ?? userData.pendingCommunityCode ?? null;
     if (userCommunityCode) {
@@ -204,27 +222,46 @@ export const createFirebaseClient = (): DataClient => ({
       createdBy: input.currentUserId,
     };
 
-    await setDoc(communityRef, {
-      ...nextCommunity,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(communityRef, {
+        ...nextCommunity,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to create community document", error);
+      return { error: "Unable to create the block document." };
+    }
 
-    await setDoc(doc(db, "communities", code, "members", input.currentUserId), {
-      userId: input.currentUserId,
-      communityCode: code,
-      email: userEmail,
-      role: "admin",
-      status: "active",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(doc(db, "communities", code, "members", input.currentUserId), {
+        userId: input.currentUserId,
+        communityCode: code,
+        email: memberEmail,
+        role: "admin",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to create admin membership", {
+        error,
+        authEmail,
+        userEmail,
+      });
+      return { error: "Unable to create the admin membership record." };
+    }
 
-    await updateDoc(userRef, {
-      memberCommunityCode: code,
-      pendingCommunityCode: null,
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await updateDoc(userRef, {
+        memberCommunityCode: code,
+        pendingCommunityCode: null,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to update user membership", error);
+      return { error: "Unable to update the user membership." };
+    }
 
     return { code };
   },
@@ -238,41 +275,79 @@ export const createFirebaseClient = (): DataClient => ({
     });
   },
   deleteCommunity: async (code, currentUserId) => {
-    void currentUserId;
     const key = normalizeCode(code);
     if (!key) return;
     const db = getFirebaseDb();
     const membersRef = collection(db, "communities", key, "members");
     const membersSnap = await getDocs(membersRef);
-    for (const docSnap of membersSnap.docs) {
+    const adminId = currentUserId ?? "";
+    const adminDoc = adminId
+      ? membersSnap.docs.find((docSnap) => docSnap.id === adminId) ?? null
+      : null;
+    const deleteMemberAndClearUser = async (docSnap: typeof membersSnap.docs[number]) => {
       const data = docSnap.data() as CommunityMember;
       const userId = data.userId ?? docSnap.id;
       await deleteDoc(docSnap.ref);
       if (userId) {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data() as User;
-          if (
-            userData.memberCommunityCode === key ||
-            userData.pendingCommunityCode === key
-          ) {
-            await updateDoc(userRef, {
-              memberCommunityCode:
-                userData.memberCommunityCode === key
-                  ? null
-                  : userData.memberCommunityCode ?? null,
-              pendingCommunityCode:
-                userData.pendingCommunityCode === key
-                  ? null
-                  : userData.pendingCommunityCode ?? null,
-              updatedAt: serverTimestamp(),
-            });
-          }
+        try {
+          await updateDoc(doc(db, "users", userId), {
+            memberCommunityCode: null,
+            pendingCommunityCode: null,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (error) {
+          console.error("Failed to clear user membership during delete", {
+            error,
+            userId,
+            communityCode: key,
+          });
         }
       }
+    };
+
+    for (const docSnap of membersSnap.docs) {
+      if (adminId && docSnap.id === adminId) continue;
+      await deleteMemberAndClearUser(docSnap);
     }
-    await deleteDoc(doc(db, "communities", key));
+
+    if (adminId) {
+      try {
+        await updateDoc(doc(db, "users", adminId), {
+          memberCommunityCode: null,
+          pendingCommunityCode: null,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Failed to clear admin membership during delete", {
+          error,
+          userId: adminId,
+          communityCode: key,
+        });
+      }
+    }
+
+    const communityRef = doc(db, "communities", key);
+    try {
+      await deleteDoc(communityRef);
+    } catch (error) {
+      console.error("Failed to delete community document", {
+        error,
+        communityCode: key,
+      });
+      return;
+    }
+
+    if (adminDoc) {
+      try {
+        await deleteDoc(adminDoc.ref);
+      } catch (error) {
+        console.error("Failed to delete admin membership document", {
+          error,
+          userId: adminId,
+          communityCode: key,
+        });
+      }
+    }
   },
   addAdmin: async (code, adminEmail): Promise<AddAdminResult> => {
     const key = normalizeCode(code);
@@ -342,6 +417,7 @@ export const createFirebaseClient = (): DataClient => ({
     if (!key) return { ok: false, error: "Community code is required." };
     if (!currentUserId) return { ok: false, error: "User not signed in." };
 
+    await ensureAuthToken();
     const db = getFirebaseDb();
     const communitySnap = await getDoc(doc(db, "communities", key));
     if (!communitySnap.exists()) {
@@ -351,8 +427,11 @@ export const createFirebaseClient = (): DataClient => ({
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) return { ok: false, error: "User not found." };
     const userData = userSnap.data() as User;
+    const authEmail = getAuthEmail();
     const userEmail = userData.email ?? "";
+    const memberEmail = authEmail || userEmail;
     if (!userEmail) return { ok: false, error: "User email missing." };
+    if (!memberEmail) return { ok: false, error: "Auth email missing." };
 
     const userCommunityCode =
       userData.memberCommunityCode ?? userData.pendingCommunityCode ?? null;
@@ -362,23 +441,55 @@ export const createFirebaseClient = (): DataClient => ({
 
     const memberRef = doc(db, "communities", key, "members", currentUserId);
     const memberSnap = await getDoc(memberRef);
-    if (!memberSnap.exists()) {
-      await setDoc(memberRef, {
-        userId: currentUserId,
-        communityCode: key,
-        email: userEmail,
-        role: "member",
-        status: "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    if (memberSnap.exists()) {
+      const existing = memberSnap.data() as CommunityMember;
+      if (existing.status === "active") {
+        return {
+          ok: false,
+          error:
+            "You already have an active membership for this block. Ask an admin to resync your account.",
+        };
+      }
+    } else {
+      try {
+        await setDoc(memberRef, {
+          userId: currentUserId,
+          communityCode: key,
+          email: memberEmail,
+          role: "member",
+          status: "pending",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Failed to create pending membership", {
+          error,
+          authEmail,
+          userEmail,
+          debug: {
+            currentUserId,
+            communityId: key,
+            memberRef: memberRef.path,
+            userCommunityCode,
+            memberCommunityCode: userData.memberCommunityCode ?? null,
+            pendingCommunityCode: userData.pendingCommunityCode ?? null,
+            communityExists: communitySnap.exists(),
+          },
+        });
+        return { ok: false, error: "Unable to create the membership request." };
+      }
     }
 
     if (!userData.memberCommunityCode && userData.pendingCommunityCode !== key) {
-      await updateDoc(userRef, {
-        pendingCommunityCode: key,
-        updatedAt: serverTimestamp(),
-      });
+      try {
+        await updateDoc(userRef, {
+          pendingCommunityCode: key,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Failed to update pending community code", error);
+        return { ok: false, error: "Unable to update the pending request." };
+      }
     }
 
     return { ok: true };
@@ -399,20 +510,19 @@ export const createFirebaseClient = (): DataClient => ({
       status: "active",
       updatedAt: serverTimestamp(),
     });
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const userData = userSnap.data() as User;
-      if (
-        userData.memberCommunityCode !== key ||
-        userData.pendingCommunityCode === key
-      ) {
-        await updateDoc(userRef, {
-          memberCommunityCode: key,
-          pendingCommunityCode: null,
-          updatedAt: serverTimestamp(),
-        });
-      }
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        memberCommunityCode: key,
+        pendingCommunityCode: null,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to update approved user membership", {
+        error,
+        userId,
+        communityCode: key,
+      });
+      return { ok: false, error: "Unable to update the member status." };
     }
     return { ok: true };
   },
@@ -428,27 +538,26 @@ export const createFirebaseClient = (): DataClient => ({
     if (!memberSnap.exists()) {
       return { ok: false, error: "Membership not found." };
     }
+    const memberData = memberSnap.data() as CommunityMember;
     await deleteDoc(memberRef);
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const userData = userSnap.data() as User;
-      if (
-        userData.memberCommunityCode === key ||
-        userData.pendingCommunityCode === key
-      ) {
-        await updateDoc(userRef, {
-          memberCommunityCode:
-            userData.memberCommunityCode === key
-              ? null
-              : userData.memberCommunityCode ?? null,
-          pendingCommunityCode:
-            userData.pendingCommunityCode === key
-              ? null
-              : userData.pendingCommunityCode ?? null,
-          updatedAt: serverTimestamp(),
-        });
-      }
+    const userPatch: Partial<User> = {
+      updatedAt: serverTimestamp(),
+    };
+    if (memberData.status === "active") {
+      userPatch.memberCommunityCode = null;
+    } else {
+      userPatch.pendingCommunityCode = null;
+    }
+    try {
+      await updateDoc(doc(db, "users", userId), userPatch);
+    } catch (error) {
+      console.error("Failed to clear user membership", {
+        error,
+        userId,
+        communityCode: key,
+        status: memberData.status,
+      });
+      return { ok: false, error: "Unable to update the member record." };
     }
     return { ok: true };
   },

@@ -26,6 +26,9 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     getCommunityContent,
     getMemberContent,
     getCommunity,
+    getPendingMembers,
+    getAdminContactEmail,
+    subscribeAdminContact,
     getMembershipFor,
     requestMembership,
     isMemberFor,
@@ -40,12 +43,27 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const isAdmin = signedIn && isAdminFor(communityCode);
   const isMember = signedIn && isMemberFor(communityCode);
   const isPending = membership?.status === "pending";
+  const pendingCount = isAdmin ? getPendingMembers(communityCode).length : 0;
+  const adminContactEmail = getAdminContactEmail(communityCode);
   const [requestError, setRequestError] = useState("");
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
     return subscribeCommunity(communityCode);
   }, [communityCode, subscribeCommunity]);
+
+  useEffect(() => {
+    if (!signedIn || (!isMember && !isAdmin)) return;
+    if (!community?.createdBy) return;
+    return subscribeAdminContact(communityCode, community.createdBy);
+  }, [
+    signedIn,
+    isMember,
+    isAdmin,
+    community?.createdBy,
+    communityCode,
+    subscribeAdminContact,
+  ]);
 
   const handleRequestMembership = async () => {
     if (requesting) return;
@@ -103,6 +121,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
         community={community}
         active="overview"
         showAdminTabs={isAdmin}
+        pendingCount={pendingCount}
         actions={
           canCreate ? (
             <button className="button ghost" onClick={onOpenCreate}>
@@ -169,6 +188,11 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             </button>
           )}
           {requestError ? <p className="helper-text error-text">{requestError}</p> : null}
+          {signedIn && (isMember || isAdmin) && adminContactEmail ? (
+            <p className="helper-text">
+              Contact admin: <a href={`mailto:${adminContactEmail}`}>{adminContactEmail}</a>
+            </p>
+          ) : null}
           <div className="divider" />
           <p className="helper-text">
             Block codes are shared offline. Signed-in admins can update content,
