@@ -66,7 +66,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
         <div className="hero-copy">
           <h1>Your block's private landing page</h1>
           <p className="lead">
-            Use a code to open your block page with chats, events, and organizer info.
+            Use a code to open your block page and connect with your neighbors.
           </p>
           {hasMemberCommunity ? (
             <div className="home-primary-cta">
@@ -95,7 +95,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
           </form>
           <div className="home-actions">
             <p className="helper-text">
-              Codes are shared neighbor-to-neighbor and are not listed or searchable.
+              Codes are shared neighbor-to-neighbor and are not listed or searchable. Ask a neighbor for your block's code, or sign in to create a community.
             </p>
             {cta ? <div className="cta-row">{cta}</div> : null}
           </div>
