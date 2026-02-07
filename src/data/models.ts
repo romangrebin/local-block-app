@@ -11,6 +11,8 @@ export type User = {
   email: string;
   memberCommunityCode: string | null;
   pendingCommunityCode?: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 };
 
 export type CommunityRole = "member" | "admin";

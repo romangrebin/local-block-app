@@ -239,9 +239,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const signOut = async () => {
     await dataClient.signOut();
-    if (dataClient.kind === "local") {
-      setCurrentUserId(null);
-    }
   };
 
   const createCommunity = async (input: CreateCommunityInput) => {
