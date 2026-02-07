@@ -3,13 +3,14 @@ export type Community = {
   name: string;
   content: string;
   memberContent?: string;
+  createdBy?: string;
 };
 
 export type User = {
   id: string;
   email: string;
   memberCommunityCode: string | null;
-  adminCommunityCode?: string | null;
+  pendingCommunityCode?: string | null;
 };
 
 export type CommunityRole = "member" | "admin";

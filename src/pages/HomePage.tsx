@@ -14,17 +14,26 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
   const {
     signedIn,
     memberCommunityCode,
+    pendingCommunityCode,
     getCommunity,
     subscribeCommunity,
     isCommunityLoaded,
   } = useAppState();
   const memberCommunity = memberCommunityCode ? getCommunity(memberCommunityCode) : null;
+  const pendingCommunity = pendingCommunityCode ? getCommunity(pendingCommunityCode) : null;
   const hasMemberCommunity = Boolean(memberCommunityCode);
+  const hasPendingCommunity = Boolean(pendingCommunityCode);
+  const isBlocked = hasMemberCommunity || hasPendingCommunity;
 
   useEffect(() => {
     if (!memberCommunityCode) return;
     return subscribeCommunity(memberCommunityCode);
   }, [memberCommunityCode, subscribeCommunity]);
+
+  useEffect(() => {
+    if (!pendingCommunityCode) return;
+    return subscribeCommunity(pendingCommunityCode);
+  }, [pendingCommunityCode, subscribeCommunity]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -34,7 +43,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
   };
 
   const renderCta = () => {
-    if (hasMemberCommunity) return null;
+    if (isBlocked) return null;
     if (!signedIn) {
       return (
         <button className="button ghost" onClick={onOpenAuth}>
@@ -79,6 +88,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
               </div>
               <Link className="button" to={`/${memberCommunityCode}`}>
                 Open {memberCommunityCode}
+              </Link>
+            </div>
+          ) : null}
+          {!hasMemberCommunity && hasPendingCommunity ? (
+            <div className="home-primary-cta">
+              <div>
+                <p className="eyebrow">Request pending</p>
+                <p className="lead">
+                  Waiting on approval for{" "}
+                  <strong>{pendingCommunity?.name ?? pendingCommunityCode}</strong>.
+                </p>
+              </div>
+              <Link className="button" to={`/${pendingCommunityCode}`}>
+                View {pendingCommunityCode}
               </Link>
             </div>
           ) : null}

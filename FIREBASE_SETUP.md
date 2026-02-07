@@ -20,7 +20,6 @@ Move the MVP from local JSON to Firebase Auth + Firestore while keeping the UI a
 
 Example `.env.local`:
 ```
-VITE_USE_FIREBASE=true
 VITE_USE_FIREBASE_EMULATORS=false
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
@@ -30,8 +29,6 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
 ```
-
-If `VITE_USE_FIREBASE` is `false`, the app falls back to the local JSON seed data and localStorage.
 
 ## Optional: Emulators
 1. Install the Firebase CLI.

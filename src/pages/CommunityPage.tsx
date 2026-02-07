@@ -22,6 +22,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const {
     signedIn,
     memberCommunityCode,
+    pendingCommunityCode,
     getCommunityContent,
     getMemberContent,
     getCommunity,
@@ -94,7 +95,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     );
   }
 
-  const canCreate = signedIn && !memberCommunityCode;
+  const canCreate = signedIn && !memberCommunityCode && !pendingCommunityCode;
 
   return (
     <div className="page">
@@ -147,6 +148,11 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
               <p className="helper-text">
                 You already belong to <code>{memberCommunityCode}</code>. Members
                 can only join one block.
+              </p>
+            ) : pendingCommunityCode && pendingCommunityCode !== communityCode ? (
+              <p className="helper-text">
+                You already requested access to <code>{pendingCommunityCode}</code>.
+                Members can only join one block at a time.
               </p>
             ) : (
               <button

@@ -10,22 +10,17 @@ import React, {
 import { Community, CommunityMember, StoreData } from "../data/models";
 import { normalizeCode, nameFromEmail } from "../data/normalize";
 import { CreateCommunityInput, SignInInput } from "../data/types";
-import { loadStore, saveStore } from "../data/store";
 import { DEFAULT_MEMBER_CONTENT } from "../data/constants";
 import { membershipKey } from "../data/memberships";
-import {
-  isFirebaseConfigured,
-  isFirebaseEnabled,
-} from "../data/firebase";
-import { createFirebaseClient, createLocalClient } from "../data/client";
+import { createFirebaseClient } from "../data/client";
 
 type AppState = {
   signedIn: boolean;
   userName: string;
   adminCommunityCode: string | null;
   memberCommunityCode: string | null;
+  pendingCommunityCode: string | null;
   communities: Record<string, Community>;
-  firebaseEnabled: boolean;
   subscribeCommunity: (code: string) => () => void;
   isCommunityLoaded: (code: string) => boolean;
   signIn: (input: SignInInput) => Promise<string | null>;
@@ -59,19 +54,17 @@ const emptyStore: StoreData = {
 type CommunityStatus = "idle" | "loading" | "loaded" | "missing";
 
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const firebaseEnabled = isFirebaseEnabled() && isFirebaseConfigured();
-  const [store, setStore] = useState<StoreData>(() =>
-    firebaseEnabled ? emptyStore : loadStore()
-  );
+  const [store, setStore] = useState<StoreData>(emptyStore);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [communityStatus, setCommunityStatus] = useState<Record<string, CommunityStatus>>({});
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
   const communityMembers = store.communityMembers;
-  const signedIn = firebaseEnabled ? Boolean(currentUserId) : Boolean(currentUserId && currentUser);
+  const signedIn = Boolean(currentUserId);
   const userName = currentUser?.email ? nameFromEmail(currentUser.email) : "Neighbor";
   const memberCommunityCode = currentUser?.memberCommunityCode ?? null;
+  const pendingCommunityCode = currentUser?.pendingCommunityCode ?? null;
   const adminCommunityCode = useMemo(() => {
     if (!currentUserId) return null;
     const adminMembership = Object.values(communityMembers).find(
@@ -85,15 +78,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateStore = useCallback(
     (updater: (prev: StoreData) => StoreData) => {
-      setStore((prev) => {
-        const next = updater(prev);
-        if (!firebaseEnabled && next !== prev) {
-          saveStore(next);
-        }
-        return next;
-      });
+      setStore((prev) => updater(prev));
     },
-    [firebaseEnabled]
+    []
   );
 
   const storeRef = useRef(store);
@@ -101,15 +88,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     storeRef.current = store;
   }, [store]);
 
-  const getStore = useCallback(() => storeRef.current, []);
-
-  const dataClient = useMemo(
-    () =>
-      firebaseEnabled
-        ? createFirebaseClient()
-        : createLocalClient({ getStore, updateStore }),
-    [firebaseEnabled, getStore, updateStore]
-  );
+  const dataClient = useMemo(() => createFirebaseClient(), []);
 
   useEffect(() => {
     dataClient.connect();
@@ -124,7 +103,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (!currentUserId) return;
-    if (dataClient.kind !== "firebase" || !dataClient.subscribeUser) return;
+    if (!dataClient.subscribeUser) return;
     return dataClient.subscribeUser(currentUserId, (user) => {
       if (!user) return;
       updateStore((prev) => ({
@@ -168,20 +147,18 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCommunityStatus((prev) => ({ ...prev, [key]: "loading" }));
 
       const unsubscribeCommunity = dataClient.subscribeCommunity(key, (community) => {
-        if (dataClient.kind === "firebase") {
-          updateStore((prev) => {
-            const nextCommunities = { ...prev.communities };
-            if (community) {
-              nextCommunities[key] = community;
-            } else {
-              delete nextCommunities[key];
-            }
-            return {
-              ...prev,
-              communities: nextCommunities,
-            };
-          });
-        }
+        updateStore((prev) => {
+          const nextCommunities = { ...prev.communities };
+          if (community) {
+            nextCommunities[key] = community;
+          } else {
+            delete nextCommunities[key];
+          }
+          return {
+            ...prev,
+            communities: nextCommunities,
+          };
+        });
         setCommunityStatus((prev) => ({
           ...prev,
           [key]: community ? "loaded" : "missing",
@@ -206,8 +183,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           })
         : () => {};
 
-      const shouldLoadMembers =
-        dataClient.kind === "local" || adminCommunityCode === key;
+      const shouldLoadMembers = adminCommunityCode === key;
       const unsubscribeMembers = shouldLoadMembers
         ? dataClient.subscribeCommunityMembers(key, (members) => {
             updateStore((prev) => {
@@ -265,7 +241,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const createCommunity = async (input: CreateCommunityInput) => {
     if (!currentUserId) return null;
-    if (memberCommunityCode) return null;
+    if (memberCommunityCode || pendingCommunityCode) return null;
     const result = await dataClient.createCommunity({
       ...input,
       currentUserId,
@@ -379,8 +355,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         userName,
         adminCommunityCode,
         memberCommunityCode,
+        pendingCommunityCode,
         communities,
-        firebaseEnabled,
         subscribeCommunity,
         isCommunityLoaded,
         signIn,

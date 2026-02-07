@@ -9,6 +9,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
     }
 
+    function communityDoc(communityId) {
+      return get(/databases/$(database)/documents/communities/$(communityId));
+    }
+
     function memberExists(communityId, userId) {
       return exists(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
     }
@@ -30,9 +34,33 @@ service cloud.firestore {
         : null;
     }
 
+    function userPendingCommunity(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        ? get(/databases/$(database)/documents/users/$(userId)).data.pendingCommunityCode
+        : null;
+    }
+
+    function userCommunityCode(userId) {
+      return userMemberCommunity(userId) != null
+        ? userMemberCommunity(userId)
+        : userPendingCommunity(userId);
+    }
+
     function adminUpdatesMemberCode() {
       return request.resource.data.diff(resource.data).changedKeys()
-        .hasOnly(["memberCommunityCode", "updatedAt"]);
+        .hasOnly(["memberCommunityCode", "pendingCommunityCode", "updatedAt"]);
+    }
+
+    function selfSetsPendingCommunity(userId) {
+      return request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(["pendingCommunityCode", "updatedAt"])
+        && request.resource.data.memberCommunityCode == resource.data.memberCommunityCode
+        && resource.data.memberCommunityCode == null
+        && resource.data.pendingCommunityCode == null
+        && request.resource.data.pendingCommunityCode is string
+        && exists(/databases/$(database)/documents/communities/$(request.resource.data.pendingCommunityCode)/members/$(userId))
+        && memberDoc(request.resource.data.pendingCommunityCode, userId).data.status == "pending";
     }
 
     match /communities/{communityId} {
@@ -40,9 +68,11 @@ service cloud.firestore {
       allow list: if false;
       allow create: if isSignedIn()
         && request.resource.data.code == communityId
-        && userMemberCommunity(request.auth.uid) == null;
+        && request.resource.data.createdBy == request.auth.uid
+        && userCommunityCode(request.auth.uid) == null;
       allow update: if isAdminFor(communityId)
-        && request.resource.data.code == resource.data.code;
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdminFor(communityId);
 
       match /members/{userId} {
@@ -57,8 +87,8 @@ service cloud.firestore {
           && request.resource.data.email is string
           && exists(/databases/$(database)/documents/communities/$(communityId))
           && (
-            userMemberCommunity(userId) == null
-            || userMemberCommunity(userId) == communityId
+            userCommunityCode(userId) == null
+            || userCommunityCode(userId) == communityId
           )
           && (
             (
@@ -70,6 +100,13 @@ service cloud.firestore {
             || (
               isAdminFor(communityId)
               && request.resource.data.status == "active"
+            )
+            || (
+              request.auth.uid == userId
+              && communityDoc(communityId).data.createdBy == userId
+              && request.resource.data.role == "admin"
+              && request.resource.data.status == "active"
+              && request.resource.data.email == request.auth.token.email
             )
           );
         allow update: if isAdminFor(communityId)
@@ -91,7 +128,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.resource.data.email == resource.data.email
         && (
-          request.auth.uid == userId
+          selfSetsPendingCommunity(userId)
           || (
             adminUpdatesMemberCode()
             && (
@@ -103,6 +140,15 @@ service cloud.firestore {
                 request.resource.data.memberCommunityCode == null
                 && resource.data.memberCommunityCode is string
                 && isAdminFor(resource.data.memberCommunityCode)
+              )
+              || (
+                request.resource.data.pendingCommunityCode is string
+                && isAdminFor(request.resource.data.pendingCommunityCode)
+              )
+              || (
+                request.resource.data.pendingCommunityCode == null
+                && resource.data.pendingCommunityCode is string
+                && isAdminFor(resource.data.pendingCommunityCode)
               )
             )
           )

@@ -22,7 +22,7 @@ export type MembershipResult = {
 };
 
 export type DataClient = {
-  kind: "firebase" | "local";
+  kind: "firebase";
   connect: () => void;
   onAuthStateChanged?: (callback: (userId: string | null) => void) => () => void;
   subscribeUser?: (userId: string, callback: (user: User | null) => void) => () => void;

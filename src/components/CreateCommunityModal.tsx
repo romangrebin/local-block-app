@@ -13,7 +13,8 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { createCommunity, memberCommunityCode, getCommunity } = useAppState();
+  const { createCommunity, memberCommunityCode, pendingCommunityCode, getCommunity } =
+    useAppState();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [content, setContent] = useState("");
@@ -22,7 +23,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   const navigate = useNavigate();
 
   const sanitizedCode = useMemo(() => toCommunitySlug(code), [code]);
-  const isBlocked = Boolean(memberCommunityCode);
+  const isBlocked = Boolean(memberCommunityCode || pendingCommunityCode);
   const existingCommunity = sanitizedCode ? getCommunity(sanitizedCode) : null;
   const hasInvalidChars = Boolean(code) && sanitizedCode !== code;
   const canCreate = !isBlocked && !existingCommunity && !hasInvalidChars;
@@ -109,7 +110,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
           ) : null}
         </label>
         <label>
-          Starter content (markdown)
+          Starter content (markdown) - updating this later is easy.
           <textarea
             rows={6}
             value={content}
@@ -119,7 +120,9 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
         </label>
         {error ? <p className="helper-text error-text">{error}</p> : null}
         {isBlocked ? (
-          <p className="helper-text">You already belong to a block.</p>
+          <p className="helper-text">
+            You already belong to (or have a pending request for) a block.
+          </p>
         ) : null}
       </form>
     </Modal>

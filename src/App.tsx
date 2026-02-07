@@ -25,11 +25,13 @@ const Header: React.FC<{
     signedIn,
     adminCommunityCode,
     memberCommunityCode,
+    pendingCommunityCode,
     userName,
     getCommunity,
   } = useAppState();
   const communityCode = adminCommunityCode ?? memberCommunityCode;
   const community = communityCode ? getCommunity(communityCode) : null;
+  const pendingCommunity = pendingCommunityCode ? getCommunity(pendingCommunityCode) : null;
 
   return (
     <header className="topbar">
@@ -48,10 +50,14 @@ const Header: React.FC<{
                 {adminCommunityCode ? "Admin" : "Member"} of{" "}
                 {community?.name ?? communityCode}
               </Link>
+            ) : pendingCommunityCode ? (
+              <Link className="badge link-badge" to={`/${pendingCommunityCode}`}>
+                Request pending: {pendingCommunity?.name ?? pendingCommunityCode}
+              </Link>
             ) : null}
           </div>
         ) : null}
-        {signedIn && !memberCommunityCode ? (
+        {signedIn && !memberCommunityCode && !pendingCommunityCode ? (
           <button className="button ghost" onClick={onOpenCreate}>
             Create block
           </button>

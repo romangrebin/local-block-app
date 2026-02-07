@@ -53,6 +53,14 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
     }
   };
 
+  const handleRemoveMember = async (userId: string) => {
+    setMemberError("");
+    const error = await denyMembership(communityCode, userId);
+    if (error) {
+      setMemberError(error);
+    }
+  };
+
   if (!community && !communityLoaded) {
     return (
       <div className="page">
@@ -165,7 +173,20 @@ export const MemberDirectoryPage: React.FC<MemberDirectoryPageProps> = ({ onOpen
               {activeMembers.map((member) => (
                 <li key={member.userId}>
                   <span>{member.email}</span>
-                  <span className="badge">{member.role === "admin" ? "Admin" : "Member"}</span>
+                  <div className="inline-actions">
+                    <span className="badge">
+                      {member.role === "admin" ? "Admin" : "Member"}
+                    </span>
+                    {member.role === "member" ? (
+                      <button
+                        className="button ghost danger"
+                        type="button"
+                        onClick={() => handleRemoveMember(member.userId)}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>

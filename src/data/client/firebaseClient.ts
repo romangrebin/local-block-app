@@ -46,6 +46,7 @@ const ensureUserDoc = async (userId: string, email: string) => {
     await setDoc(userRef, {
       email,
       memberCommunityCode: null,
+      pendingCommunityCode: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -75,8 +76,8 @@ export const createFirebaseClient = (): DataClient => ({
       callback({
         id: userId,
         email: data.email ?? "",
-        memberCommunityCode:
-          data.memberCommunityCode ?? data.adminCommunityCode ?? null,
+        memberCommunityCode: data.memberCommunityCode ?? null,
+        pendingCommunityCode: data.pendingCommunityCode ?? null,
       });
     });
   },
@@ -99,6 +100,7 @@ export const createFirebaseClient = (): DataClient => ({
         name: data.name,
         content: data.content,
         memberContent: data.memberContent,
+        createdBy: data.createdBy,
       });
     });
   },
@@ -188,9 +190,9 @@ export const createFirebaseClient = (): DataClient => ({
     const userData = userSnap.data() as User;
     const userEmail = userData.email ?? "";
     if (!userEmail) return { error: "User email missing." };
-    const memberCommunityCode =
-      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
-    if (memberCommunityCode) {
+    const userCommunityCode =
+      userData.memberCommunityCode ?? userData.pendingCommunityCode ?? null;
+    if (userCommunityCode) {
       return { error: "User already belongs to a block." };
     }
 
@@ -199,6 +201,7 @@ export const createFirebaseClient = (): DataClient => ({
       name: input.name.trim() || DEFAULT_COMMUNITY_NAME,
       content: input.content?.trim() || DEFAULT_COMMUNITY_CONTENT,
       memberContent: DEFAULT_MEMBER_CONTENT,
+      createdBy: input.currentUserId,
     };
 
     await setDoc(communityRef, {
@@ -219,6 +222,7 @@ export const createFirebaseClient = (): DataClient => ({
 
     await updateDoc(userRef, {
       memberCommunityCode: code,
+      pendingCommunityCode: null,
       updatedAt: serverTimestamp(),
     });
 
@@ -249,9 +253,19 @@ export const createFirebaseClient = (): DataClient => ({
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data() as User;
-          if (userData.memberCommunityCode === key) {
+          if (
+            userData.memberCommunityCode === key ||
+            userData.pendingCommunityCode === key
+          ) {
             await updateDoc(userRef, {
-              memberCommunityCode: null,
+              memberCommunityCode:
+                userData.memberCommunityCode === key
+                  ? null
+                  : userData.memberCommunityCode ?? null,
+              pendingCommunityCode:
+                userData.pendingCommunityCode === key
+                  ? null
+                  : userData.pendingCommunityCode ?? null,
               updatedAt: serverTimestamp(),
             });
           }
@@ -280,9 +294,9 @@ export const createFirebaseClient = (): DataClient => ({
     const userDoc = usersSnap.docs[0];
     const userId = userDoc.id;
     const userData = userDoc.data() as User;
-    const memberCommunityCode =
-      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
-    if (memberCommunityCode && memberCommunityCode !== key) {
+    const userCommunityCode =
+      userData.memberCommunityCode ?? userData.pendingCommunityCode ?? null;
+    if (userCommunityCode && userCommunityCode !== key) {
       return { ok: false, error: "That user already belongs to another block." };
     }
 
@@ -310,9 +324,10 @@ export const createFirebaseClient = (): DataClient => ({
       });
     }
 
-    if (!memberCommunityCode) {
+    if (!userData.memberCommunityCode || userData.pendingCommunityCode === key) {
       await updateDoc(doc(db, "users", userId), {
         memberCommunityCode: key,
+        pendingCommunityCode: null,
         updatedAt: serverTimestamp(),
       });
     }
@@ -339,9 +354,9 @@ export const createFirebaseClient = (): DataClient => ({
     const userEmail = userData.email ?? "";
     if (!userEmail) return { ok: false, error: "User email missing." };
 
-    const memberCommunityCode =
-      userData.memberCommunityCode ?? userData.adminCommunityCode ?? null;
-    if (memberCommunityCode && memberCommunityCode !== key) {
+    const userCommunityCode =
+      userData.memberCommunityCode ?? userData.pendingCommunityCode ?? null;
+    if (userCommunityCode && userCommunityCode !== key) {
       return { ok: false, error: "You already belong to another community." };
     }
 
@@ -359,9 +374,9 @@ export const createFirebaseClient = (): DataClient => ({
       });
     }
 
-    if (!memberCommunityCode) {
+    if (!userData.memberCommunityCode && userData.pendingCommunityCode !== key) {
       await updateDoc(userRef, {
-        memberCommunityCode: key,
+        pendingCommunityCode: key,
         updatedAt: serverTimestamp(),
       });
     }
@@ -388,9 +403,13 @@ export const createFirebaseClient = (): DataClient => ({
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
       const userData = userSnap.data() as User;
-      if (userData.memberCommunityCode !== key) {
+      if (
+        userData.memberCommunityCode !== key ||
+        userData.pendingCommunityCode === key
+      ) {
         await updateDoc(userRef, {
           memberCommunityCode: key,
+          pendingCommunityCode: null,
           updatedAt: serverTimestamp(),
         });
       }
@@ -414,9 +433,19 @@ export const createFirebaseClient = (): DataClient => ({
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
       const userData = userSnap.data() as User;
-      if (userData.memberCommunityCode === key) {
+      if (
+        userData.memberCommunityCode === key ||
+        userData.pendingCommunityCode === key
+      ) {
         await updateDoc(userRef, {
-          memberCommunityCode: null,
+          memberCommunityCode:
+            userData.memberCommunityCode === key
+              ? null
+              : userData.memberCommunityCode ?? null,
+          pendingCommunityCode:
+            userData.pendingCommunityCode === key
+              ? null
+              : userData.pendingCommunityCode ?? null,
           updatedAt: serverTimestamp(),
         });
       }

@@ -19,14 +19,10 @@ export const isFirebaseConfigured = () =>
 
 const isConfigured = isFirebaseConfigured();
 
-export const isFirebaseEnabled = () => import.meta.env.VITE_USE_FIREBASE === "true";
 let cachedApp: FirebaseApp | null = null;
 let emulatorConnected = false;
 
 export const getFirebaseApp = () => {
-  if (!isFirebaseEnabled()) {
-    throw new Error("Firebase is disabled. Set VITE_USE_FIREBASE=true.");
-  }
   if (!isConfigured) {
     throw new Error("Firebase config is missing. Check your .env.local values.");
   }
@@ -44,7 +40,7 @@ export const getFirebaseAuth = () => {
 export const getFirebaseDb = () => getFirestore(getFirebaseApp());
 
 export const connectEmulators = () => {
-  if (emulatorConnected || !isFirebaseEnabled()) return;
+  if (emulatorConnected) return;
   if (import.meta.env.VITE_USE_FIREBASE_EMULATORS !== "true") return;
 
   const auth = getFirebaseAuth();
