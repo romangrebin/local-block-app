@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,6 +7,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state/AppState";
+import { logPageView } from "./data/firebase";
 import { HomePage } from "./pages/HomePage";
 import { CommunityPage } from "./pages/CommunityPage";
 import { ManageCommunityPage } from "./pages/ManageCommunityPage";
@@ -91,6 +92,10 @@ const AppFrame: React.FC<{
   ]
     .filter(Boolean)
     .join(" ");
+
+  useEffect(() => {
+    logPageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
 
   return (
     <div className={appClassName}>

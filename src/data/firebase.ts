@@ -1,4 +1,5 @@
 import { FirebaseApp, getApps, initializeApp } from "firebase/app";
+import { Analytics, getAnalytics, isSupported, logEvent } from "firebase/analytics";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
@@ -21,6 +22,7 @@ const isConfigured = isFirebaseConfigured();
 
 let cachedApp: FirebaseApp | null = null;
 let emulatorConnected = false;
+let analyticsPromise: Promise<Analytics | null> | null = null;
 
 export const getFirebaseApp = () => {
   if (!isConfigured) {
@@ -38,6 +40,27 @@ export const getFirebaseAuth = () => {
 };
 
 export const getFirebaseDb = () => getFirestore(getFirebaseApp());
+
+export const getFirebaseAnalytics = () => {
+  if (analyticsPromise) return analyticsPromise;
+  analyticsPromise = (async () => {
+    if (!firebaseConfig.measurementId) return null;
+    if (!(await isSupported())) return null;
+    return getAnalytics(getFirebaseApp());
+  })();
+  return analyticsPromise;
+};
+
+export const logPageView = async (path?: string) => {
+  const analytics = await getFirebaseAnalytics();
+  if (!analytics) return;
+  const pagePath = path ?? window.location.pathname + window.location.search;
+  logEvent(analytics, "page_view", {
+    page_path: pagePath,
+    page_location: window.location.href,
+    page_title: document.title,
+  });
+};
 
 export const connectEmulators = () => {
   if (emulatorConnected) return;
