@@ -34,7 +34,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, 
       >
         <header className="modal-header">
           <div>
-            <p className="eyebrow">Local Block</p>
+            <p className="eyebrow">Our Block</p>
             <h2 id="modal-title">{title}</h2>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close">

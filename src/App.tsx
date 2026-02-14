@@ -38,7 +38,7 @@ const Header: React.FC<{
     <header className="topbar">
       <div className="brand">
         <Link to="/" className="brand-link">
-          Local Block
+          Our Block
         </Link>
         <span className="tag">A private landing page for your block</span>
       </div>
@@ -136,7 +136,7 @@ const AppFrame: React.FC<{
         </Routes>
       </main>
       <footer className="footer">
-        <p>Local Block MVP. Simple, private, neighbor-led.</p>
+        <p>Our Block. Simple, private, neighbor-led.</p>
       </footer>
     </div>
   );
