@@ -65,11 +65,24 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.code == communityId
         && request.resource.data.createdBy == request.auth.uid
-        && userCommunityCode(request.auth.uid) == null;
+        && userCommunityCode(request.auth.uid) == null
+        && !request.resource.data.keys().hasAny(["memberContent"]);
       allow update: if isAdminFor(communityId)
         && request.resource.data.code == resource.data.code
-        && request.resource.data.createdBy == resource.data.createdBy;
+        && request.resource.data.createdBy == resource.data.createdBy
+        && !request.resource.data.diff(resource.data).changedKeys().hasAny(["memberContent"]);
       allow delete: if isAdminFor(communityId);
+
+      match /private/{docId} {
+        allow get: if docId == "memberContent"
+          && isActiveMember(communityId, request.auth.uid);
+        allow list: if false;
+        allow create, update: if docId == "memberContent"
+          && isAdminFor(communityId)
+          && request.resource.data.content is string;
+        allow delete: if docId == "memberContent"
+          && isAdminFor(communityId);
+      }
 
       match /members/{userId} {
         allow get: if isSignedIn() && (

@@ -20,10 +20,12 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   const {
     signedIn,
     updateCommunity,
+    updateMemberContent,
     addAdmin,
     deleteCommunity,
     getCommunityAdmins,
     getPendingMembers,
+    getMemberContent,
     getCommunity,
     isAdminFor,
     subscribeCommunity,
@@ -31,12 +33,13 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   } = useAppState();
 
   const community = getCommunity(communityCode);
+  const currentMemberContent = getMemberContent(communityCode);
   const communityLoaded = isCommunityLoaded(communityCode);
   const isAdmin = signedIn && isAdminFor(communityCode);
   const pendingCount = isAdmin ? getPendingMembers(communityCode).length : 0;
 
   const [content, setContent] = useState(community?.content ?? "");
-  const [memberContent, setMemberContent] = useState(community?.memberContent ?? "");
+  const [memberContent, setMemberContent] = useState(currentMemberContent);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminError, setAdminError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -52,10 +55,10 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   useEffect(() => {
     if (!community) return;
     setContent(community.content);
-    setMemberContent(community.memberContent ?? "");
+    setMemberContent(currentMemberContent);
     setAdminError("");
     setSaved(false);
-  }, [community?.code]);
+  }, [community?.code, currentMemberContent]);
 
   useEffect(() => {
     if (!saved) return;
@@ -99,16 +102,20 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   }
 
   const adminEmails = getCommunityAdmins(community.code);
-  const hasChanges =
-    content !== community.content ||
-    memberContent !== (community.memberContent ?? "");
+  const hasChanges = content !== community.content || memberContent !== currentMemberContent;
 
   const handleSave = async () => {
     if (!community || saving) return;
     setSaving(true);
-    await updateCommunity(community.code, { content, memberContent });
-    setSaving(false);
-    setSaved(true);
+    try {
+      await Promise.all([
+        updateCommunity(community.code, { content }),
+        updateMemberContent(community.code, memberContent),
+      ]);
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddAdmin = async (event: React.FormEvent) => {

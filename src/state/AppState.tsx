@@ -29,6 +29,7 @@ type AppState = {
     input: CreateCommunityInput
   ) => Promise<{ code?: string; error?: string }>;
   updateCommunity: (code: string, patch: Partial<Community>) => Promise<void>;
+  updateMemberContent: (code: string, content: string) => Promise<void>;
   deleteCommunity: (code: string) => Promise<void>;
   addAdmin: (code: string, admin: string) => Promise<string | null>;
   getCommunityAdmins: (code: string) => string[];
@@ -62,6 +63,9 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [communityStatus, setCommunityStatus] = useState<Record<string, CommunityStatus>>({});
   const [adminContacts, setAdminContacts] = useState<Record<string, string>>({});
+  const [memberContentByCommunity, setMemberContentByCommunity] = useState<
+    Record<string, string>
+  >({});
 
   const currentUser = currentUserId ? store.users[currentUserId] : null;
   const communities = store.communities;
@@ -150,6 +154,51 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const key = normalizeCode(code);
       if (!key) return () => {};
       setCommunityStatus((prev) => ({ ...prev, [key]: "loading" }));
+      let unsubscribeMemberContent = () => {};
+      let memberContentSubscribed = false;
+
+      const clearMemberContent = () => {
+        setMemberContentByCommunity((prev) => {
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      };
+
+      const stopMemberContentSubscription = () => {
+        if (!memberContentSubscribed) return;
+        unsubscribeMemberContent();
+        unsubscribeMemberContent = () => {};
+        memberContentSubscribed = false;
+        clearMemberContent();
+      };
+
+      const startMemberContentSubscription = () => {
+        if (memberContentSubscribed) return;
+        if (!currentUserId) return;
+        if (!dataClient.subscribeCommunityMemberContent) return;
+        memberContentSubscribed = true;
+        unsubscribeMemberContent = dataClient.subscribeCommunityMemberContent(
+          key,
+          currentUserId,
+          (content) => {
+            setMemberContentByCommunity((prev) => {
+              if (!content) {
+                if (!(key in prev)) return prev;
+                const next = { ...prev };
+                delete next[key];
+                return next;
+              }
+              if (prev[key] === content) return prev;
+              return {
+                ...prev,
+                [key]: content,
+              };
+            });
+          }
+        );
+      };
 
       const unsubscribeCommunity = dataClient.subscribeCommunity(key, (community) => {
         updateStore((prev) => {
@@ -185,8 +234,15 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 communityMembers: nextMembers,
               };
             });
+            if (member?.status === "active") {
+              startMemberContentSubscription();
+            } else {
+              stopMemberContentSubscription();
+            }
           })
-        : () => {};
+        : () => {
+            clearMemberContent();
+          };
 
       const shouldLoadMembers = adminCommunityCode === key;
       const unsubscribeMembers = shouldLoadMembers
@@ -213,6 +269,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         unsubscribeCommunity();
         unsubscribeMembership();
         unsubscribeMembers();
+        stopMemberContentSubscription();
       };
     },
     [adminCommunityCode, currentUserId, dataClient, updateStore]
@@ -255,6 +312,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateCommunity = async (code: string, patch: Partial<Community>) => {
     await dataClient.updateCommunity(code, patch);
+  };
+
+  const updateMemberContent = async (code: string, content: string) => {
+    if (!dataClient.updateCommunityMemberContent) return;
+    await dataClient.updateCommunityMemberContent(code, content);
   };
 
   const deleteCommunity = async (code: string) => {
@@ -343,7 +405,11 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const getMemberContent = (code: string) => {
     const key = normalizeCode(code);
-    return communities[key]?.memberContent || DEFAULT_MEMBER_CONTENT;
+    return (
+      memberContentByCommunity[key] ||
+      communities[key]?.memberContent ||
+      DEFAULT_MEMBER_CONTENT
+    );
   };
 
   const getCommunity = (code: string) => {
@@ -400,6 +466,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         signOut,
         createCommunity,
         updateCommunity,
+        updateMemberContent,
         deleteCommunity,
         addAdmin,
         getCommunityAdmins,

@@ -50,6 +50,29 @@ VITE_FIREBASE_MEASUREMENT_ID=...
 - Firestore rules block list queries so communities cannot be enumerated.
 - Make sure you deploy the latest `firestore.rules` after updating.
 
+## Migrate Member-Only Content (Public -> Private Path)
+Member-only content now lives at:
+`communities/{code}/private/memberContent`
+
+Run the migration in two steps:
+1. Dry run:
+   ```
+   npm run migrate:member-content
+   ```
+2. Copy legacy values into the private path:
+   ```
+   npm run migrate:member-content -- --apply
+   ```
+3. After validating member reads/writes in the app, remove the old public field:
+   ```
+   npm run migrate:member-content -- --apply --remove-public
+   ```
+
+You can test a single community first with:
+```
+npm run migrate:member-content -- --code=my-community-code
+```
+
 ## Hosting (Production)
 1. Run `npm run build`.
 2. Run `firebase init hosting`.

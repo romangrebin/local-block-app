@@ -39,12 +39,18 @@ export type DataClient = {
     userId: string,
     callback: (member: CommunityMember | null) => void
   ) => () => void;
+  subscribeCommunityMemberContent?: (
+    code: string,
+    userId: string,
+    callback: (content: string | null) => void
+  ) => () => void;
   signIn: (input: SignInInput) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   createCommunity: (
     input: CreateCommunityInput & { currentUserId: string }
   ) => Promise<CreateCommunityResult>;
   updateCommunity: (code: string, patch: Partial<Community>) => Promise<void>;
+  updateCommunityMemberContent?: (code: string, content: string) => Promise<void>;
   deleteCommunity: (code: string, currentUserId?: string) => Promise<void>;
   addAdmin: (code: string, adminEmail: string) => Promise<AddAdminResult>;
   requestMembership: (

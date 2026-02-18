@@ -8,8 +8,6 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 const DEFAULT_COMMUNITY_NAME = "New Block";
 const DEFAULT_COMMUNITY_CONTENT =
   "## New Block\n\nAdd links, event info, and organizers here.";
-const DEFAULT_MEMBER_CONTENT =
-  "### Member-only updates\n\nShare private notes for verified neighbors here.";
 
 const args = new Set(process.argv.slice(2));
 const shouldFix = args.has("--fix");
@@ -38,12 +36,12 @@ const allowedCommunityFields = new Set([
   "code",
   "name",
   "content",
-  "memberContent",
   "createdBy",
   "createdAt",
   "updatedAt",
 ]);
 const deprecatedCommunityFields = new Set([
+  "memberContent",
   "admins",
   "adminEmails",
   "communityAdmins",
@@ -190,16 +188,6 @@ communities.forEach(({ id, data }) => {
       fix: true,
     });
     if (shouldFix) queueUpdate(communityRef, { content: DEFAULT_COMMUNITY_CONTENT });
-  }
-
-  if (typeof data.memberContent !== "string" || !data.memberContent.trim()) {
-    logIssue({
-      type: "community.memberContent",
-      path,
-      message: "Missing or invalid memberContent.",
-      fix: true,
-    });
-    if (shouldFix) queueUpdate(communityRef, { memberContent: DEFAULT_MEMBER_CONTENT });
   }
 
   if (data.createdBy == null) {

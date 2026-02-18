@@ -67,6 +67,10 @@ const ensureAuthToken = async () => {
     // Ignore token refresh errors; request will fail if auth is invalid.
   }
 };
+
+const memberContentRefFor = (communityCode: string) =>
+  doc(getFirebaseDb(), "communities", communityCode, "private", "memberContent");
+
 export const createFirebaseClient = (): DataClient => ({
   kind: "firebase",
   connect: () => {
@@ -164,6 +168,28 @@ export const createFirebaseClient = (): DataClient => ({
       callback(members);
     });
   },
+  subscribeCommunityMemberContent: (code, userId, callback) => {
+    const key = normalizeCode(code);
+    if (!key || !userId) {
+      callback(null);
+      return () => {};
+    }
+    const ref = memberContentRefFor(key);
+    return onSnapshot(
+      ref,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          callback(null);
+          return;
+        }
+        const raw = snapshot.data() as { content?: unknown };
+        callback(typeof raw.content === "string" ? raw.content : null);
+      },
+      () => {
+        callback(null);
+      }
+    );
+  },
   signIn: async (input: SignInInput): Promise<SignInResult> => {
     const email = normalizeEmail(input.email);
     if (!email) return { error: "Email is required." };
@@ -218,7 +244,6 @@ export const createFirebaseClient = (): DataClient => ({
       code,
       name: input.name.trim() || DEFAULT_COMMUNITY_NAME,
       content: input.content?.trim() || DEFAULT_COMMUNITY_CONTENT,
-      memberContent: DEFAULT_MEMBER_CONTENT,
       createdBy: input.currentUserId,
     };
 
@@ -253,6 +278,31 @@ export const createFirebaseClient = (): DataClient => ({
     }
 
     try {
+      await setDoc(memberContentRefFor(code), {
+        content: DEFAULT_MEMBER_CONTENT,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn("Falling back to legacy member-only content location", {
+        error,
+        communityCode: code,
+      });
+      try {
+        await updateDoc(communityRef, {
+          memberContent: DEFAULT_MEMBER_CONTENT,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (fallbackError) {
+        console.error("Failed to initialize member-only content", {
+          error: fallbackError,
+          communityCode: code,
+        });
+        return { error: "Unable to initialize the member-only content." };
+      }
+    }
+
+    try {
       await updateDoc(userRef, {
         memberCommunityCode: code,
         pendingCommunityCode: null,
@@ -271,6 +321,31 @@ export const createFirebaseClient = (): DataClient => ({
     const db = getFirebaseDb();
     await updateDoc(doc(db, "communities", key), {
       ...patch,
+      updatedAt: serverTimestamp(),
+    });
+  },
+  updateCommunityMemberContent: async (code, content) => {
+    const key = normalizeCode(code);
+    if (!key) return;
+    try {
+      await setDoc(
+        memberContentRefFor(key),
+        {
+          content,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      return;
+    } catch (error) {
+      console.warn("Falling back to legacy member-only content location", {
+        error,
+        communityCode: key,
+      });
+    }
+    const db = getFirebaseDb();
+    await updateDoc(doc(db, "communities", key), {
+      memberContent: content,
       updatedAt: serverTimestamp(),
     });
   },
@@ -335,6 +410,15 @@ export const createFirebaseClient = (): DataClient => ({
         communityCode: key,
       });
       return;
+    }
+
+    try {
+      await deleteDoc(memberContentRefFor(key));
+    } catch (error) {
+      console.error("Failed to delete member-only content document", {
+        error,
+        communityCode: key,
+      });
     }
 
     if (adminDoc) {

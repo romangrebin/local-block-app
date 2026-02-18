@@ -5,6 +5,9 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
+const DEFAULT_MEMBER_CONTENT =
+  "### Member-only updates\n\nShare private notes for verified neighbors here.";
+
 const serviceAccountPath =
   process.env.GOOGLE_APPLICATION_CREDENTIALS ||
   process.env.FIREBASE_SERVICE_ACCOUNT ||
@@ -50,7 +53,15 @@ communityValues.forEach((community) => {
       code: community.code,
       name: community.name,
       content: community.content,
-      memberContent: community.memberContent ?? null,
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  batch.set(
+    ref.collection("private").doc("memberContent"),
+    {
+      content: community.memberContent ?? DEFAULT_MEMBER_CONTENT,
       updatedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
     },
