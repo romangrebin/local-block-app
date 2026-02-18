@@ -77,6 +77,7 @@ npm run migrate:member-content -- --code=my-community-code
 1. Run `npm run build`.
 2. Run `firebase init hosting`.
 3. Deploy with `firebase deploy`.
+4. Confirm Hosting headers are active (from `firebase.json`) after deploy.
 
 
 ## GitHub Actions (Manual Deploy)
