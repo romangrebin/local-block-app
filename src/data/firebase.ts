@@ -1,5 +1,6 @@
 import { FirebaseApp, getApps, initializeApp } from "firebase/app";
 import { Analytics, getAnalytics, isSupported, logEvent } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
@@ -23,6 +24,32 @@ const isConfigured = isFirebaseConfigured();
 let cachedApp: FirebaseApp | null = null;
 let emulatorConnected = false;
 let analyticsPromise: Promise<Analytics | null> | null = null;
+let appCheckInitialized = false;
+
+const initializeFirebaseAppCheck = (app: FirebaseApp) => {
+  if (appCheckInitialized) return;
+  appCheckInitialized = true;
+
+  if (typeof window === "undefined") return;
+
+  const siteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+  if (!siteKey) return;
+
+  const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+  if (debugToken) {
+    (self as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      debugToken === "true" ? true : debugToken;
+  }
+
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    console.warn("App Check initialization failed; continuing without App Check.", error);
+  }
+};
 
 export const getFirebaseApp = () => {
   if (!isConfigured) {
@@ -31,6 +58,7 @@ export const getFirebaseApp = () => {
   if (cachedApp) return cachedApp;
   const existing = getApps();
   cachedApp = existing.length ? existing[0] : initializeApp(firebaseConfig);
+  initializeFirebaseAppCheck(cachedApp);
   return cachedApp;
 };
 

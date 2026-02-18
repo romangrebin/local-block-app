@@ -28,6 +28,8 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
+VITE_FIREBASE_APPCHECK_SITE_KEY=
+# Optional (local/dev only): VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=true
 ```
 
 ## Optional: Emulators
@@ -49,6 +51,18 @@ VITE_FIREBASE_MEASUREMENT_ID=...
 ## Privacy & Discovery
 - Firestore rules block list queries so communities cannot be enumerated.
 - Make sure you deploy the latest `firestore.rules` after updating.
+
+## App Check (Anti-bot Hardening)
+App Check is now wired in the client and activates when `VITE_FIREBASE_APPCHECK_SITE_KEY` is set.
+
+Rollout sequence:
+1. In Firebase Console, enable App Check for your Web app (reCAPTCHA v3) and copy the site key.
+2. Set `VITE_FIREBASE_APPCHECK_SITE_KEY` in local env (and CI secret if using GitHub Actions).
+3. Deploy and verify the app still works.
+4. In Firebase Console, enforce App Check for Firestore after verification.
+
+For local development/testing with debug tokens, you can set:
+`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=true`
 
 ## Migrate Member-Only Content (Public -> Private Path)
 Member-only content now lives at:
@@ -82,13 +96,14 @@ npm run migrate:member-content -- --code=my-community-code
 
 ## GitHub Actions (Manual Deploy)
 1. Add repo secrets for the build:
-   - `VITE_FIREBASE_API_KEY`
-   - `VITE_FIREBASE_AUTH_DOMAIN`
-   - `VITE_FIREBASE_PROJECT_ID`
-   - `VITE_FIREBASE_STORAGE_BUCKET`
-   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
-   - `VITE_FIREBASE_APP_ID`
-   - `VITE_FIREBASE_MEASUREMENT_ID`
+  - `VITE_FIREBASE_API_KEY`
+  - `VITE_FIREBASE_AUTH_DOMAIN`
+  - `VITE_FIREBASE_PROJECT_ID`
+  - `VITE_FIREBASE_STORAGE_BUCKET`
+  - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+  - `VITE_FIREBASE_APP_ID`
+  - `VITE_FIREBASE_MEASUREMENT_ID`
+  - `VITE_FIREBASE_APPCHECK_SITE_KEY` (optional until App Check rollout)
 2. Add a service account JSON as the secret `FIREBASE_SERVICE_ACCOUNT`.
 3. The workflow `Deploy to Firebase Hosting (Manual)` can be run from the Actions tab.
 

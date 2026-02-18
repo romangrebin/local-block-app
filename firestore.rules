@@ -66,9 +66,7 @@ service cloud.firestore {
         "content",
         "createdBy",
         "createdAt",
-        "updatedAt",
-        // Temporary allowance so legacy docs can still be updated while this field is phased out.
-        "memberContent"
+        "updatedAt"
       ]);
     }
 
