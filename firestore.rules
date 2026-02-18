@@ -59,6 +59,41 @@ service cloud.firestore {
         && request.resource.data.pendingCommunityCode is string;
     }
 
+    function hasValidCommunityKeys(data) {
+      return data.keys().hasOnly([
+        "code",
+        "name",
+        "content",
+        "createdBy",
+        "createdAt",
+        "updatedAt",
+        // Temporary allowance so legacy docs can still be updated while this field is phased out.
+        "memberContent"
+      ]);
+    }
+
+    function hasValidCommunityPayload(data, communityId) {
+      return hasValidCommunityKeys(data)
+        && data.code is string
+        && data.code == communityId
+        && data.code.size() > 0
+        && data.code.size() <= 64
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.content is string
+        && data.content.size() <= 10000
+        && data.createdBy is string
+        && data.createdBy.size() > 0
+        && data.createdBy.size() <= 128;
+    }
+
+    function hasValidPrivateMemberContentPayload(data) {
+      return data.keys().hasOnly(["content", "createdAt", "updatedAt"])
+        && data.content is string
+        && data.content.size() <= 10000;
+    }
+
     match /communities/{communityId} {
       allow get: if true;
       allow list: if false;
@@ -66,10 +101,12 @@ service cloud.firestore {
         && request.resource.data.code == communityId
         && request.resource.data.createdBy == request.auth.uid
         && userCommunityCode(request.auth.uid) == null
+        && hasValidCommunityPayload(request.resource.data, communityId)
         && !request.resource.data.keys().hasAny(["memberContent"]);
       allow update: if isAdminFor(communityId)
         && request.resource.data.code == resource.data.code
         && request.resource.data.createdBy == resource.data.createdBy
+        && hasValidCommunityPayload(request.resource.data, communityId)
         && !request.resource.data.diff(resource.data).changedKeys().hasAny(["memberContent"]);
       allow delete: if isAdminFor(communityId);
 
@@ -79,7 +116,7 @@ service cloud.firestore {
         allow list: if false;
         allow create, update: if docId == "memberContent"
           && isAdminFor(communityId)
-          && request.resource.data.content is string;
+          && hasValidPrivateMemberContentPayload(request.resource.data);
         allow delete: if docId == "memberContent"
           && isAdminFor(communityId);
       }

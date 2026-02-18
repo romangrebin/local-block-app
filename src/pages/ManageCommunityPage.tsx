@@ -11,6 +11,9 @@ type ManageCommunityPageProps = {
   onOpenAuth: () => void;
 };
 
+const MAX_CONTENT_CHARS = 10000;
+const MAX_MEMBER_CONTENT_CHARS = 10000;
+
 export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpenAuth }) => {
   const params = useParams();
   const navigate = useNavigate();
@@ -102,6 +105,11 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
   }
 
   const adminEmails = getCommunityAdmins(community.code);
+  const contentCharCount = content.length;
+  const memberContentCharCount = memberContent.length;
+  const contentTooLong = contentCharCount > MAX_CONTENT_CHARS;
+  const memberContentTooLong = memberContentCharCount > MAX_MEMBER_CONTENT_CHARS;
+  const hasLengthViolation = contentTooLong || memberContentTooLong;
   const hasChanges = content !== community.content || memberContent !== currentMemberContent;
 
   const handleSave = async () => {
@@ -190,7 +198,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
               className="button"
               type="button"
               onClick={handleSave}
-              disabled={!hasChanges || saving}
+              disabled={!hasChanges || hasLengthViolation || saving}
             >
               {saving ? "Saving..." : "Save changes"}
             </button>
@@ -228,12 +236,17 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
           <textarea
             className="manage-textarea"
             aria-label="Community content markdown"
+            maxLength={MAX_CONTENT_CHARS}
             value={content}
             onChange={(event) => {
               setContent(event.target.value);
               if (saved) setSaved(false);
             }}
           />
+          <p className={`helper-text ${contentTooLong ? "error-text" : ""}`}>
+            {contentCharCount.toLocaleString()} / {MAX_CONTENT_CHARS.toLocaleString()}{" "}
+            characters
+          </p>
         </div>
         {showPreview ? (
           <div className="card manage-preview">
@@ -256,6 +269,7 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
           <textarea
             className="member-textarea"
             rows={4}
+            maxLength={MAX_MEMBER_CONTENT_CHARS}
             value={memberContent}
             onChange={(event) => {
               setMemberContent(event.target.value);
@@ -263,6 +277,10 @@ export const ManageCommunityPage: React.FC<ManageCommunityPageProps> = ({ onOpen
             }}
             placeholder="Add a short private update for members."
           />
+          <p className={`helper-text ${memberContentTooLong ? "error-text" : ""}`}>
+            {memberContentCharCount.toLocaleString()} /{" "}
+            {MAX_MEMBER_CONTENT_CHARS.toLocaleString()} characters
+          </p>
         </div>
         <div className="stack">
           <div className="card">
