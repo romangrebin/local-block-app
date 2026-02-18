@@ -117,7 +117,6 @@ export const createFirebaseClient = (): DataClient => ({
         code: data.code,
         name: data.name,
         content: data.content,
-        memberContent: data.memberContent,
         createdBy: data.createdBy,
       });
     });
@@ -284,22 +283,11 @@ export const createFirebaseClient = (): DataClient => ({
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
-      console.warn("Falling back to legacy member-only content location", {
+      console.error("Failed to initialize member-only content", {
         error,
         communityCode: code,
       });
-      try {
-        await updateDoc(communityRef, {
-          memberContent: DEFAULT_MEMBER_CONTENT,
-          updatedAt: serverTimestamp(),
-        });
-      } catch (fallbackError) {
-        console.error("Failed to initialize member-only content", {
-          error: fallbackError,
-          communityCode: code,
-        });
-        return { error: "Unable to initialize the member-only content." };
-      }
+      return { error: "Unable to initialize the member-only content." };
     }
 
     try {
@@ -327,27 +315,14 @@ export const createFirebaseClient = (): DataClient => ({
   updateCommunityMemberContent: async (code, content) => {
     const key = normalizeCode(code);
     if (!key) return;
-    try {
-      await setDoc(
-        memberContentRefFor(key),
-        {
-          content,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-      return;
-    } catch (error) {
-      console.warn("Falling back to legacy member-only content location", {
-        error,
-        communityCode: key,
-      });
-    }
-    const db = getFirebaseDb();
-    await updateDoc(doc(db, "communities", key), {
-      memberContent: content,
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(
+      memberContentRefFor(key),
+      {
+        content,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   },
   deleteCommunity: async (code, currentUserId) => {
     const key = normalizeCode(code);

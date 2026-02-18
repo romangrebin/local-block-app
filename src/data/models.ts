@@ -2,7 +2,6 @@ export type Community = {
   code: string;
   name: string;
   content: string;
-  memberContent?: string;
   createdBy?: string;
 };
 

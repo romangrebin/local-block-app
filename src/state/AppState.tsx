@@ -177,7 +177,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const startMemberContentSubscription = () => {
         if (memberContentSubscribed) return;
         if (!currentUserId) return;
-        if (!dataClient.subscribeCommunityMemberContent) return;
         memberContentSubscribed = true;
         unsubscribeMemberContent = dataClient.subscribeCommunityMemberContent(
           key,
@@ -315,7 +314,6 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateMemberContent = async (code: string, content: string) => {
-    if (!dataClient.updateCommunityMemberContent) return;
     await dataClient.updateCommunityMemberContent(code, content);
   };
 
@@ -405,11 +403,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const getMemberContent = (code: string) => {
     const key = normalizeCode(code);
-    return (
-      memberContentByCommunity[key] ||
-      communities[key]?.memberContent ||
-      DEFAULT_MEMBER_CONTENT
-    );
+    return memberContentByCommunity[key] || DEFAULT_MEMBER_CONTENT;
   };
 
   const getCommunity = (code: string) => {
