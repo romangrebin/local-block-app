@@ -88,6 +88,10 @@ npm run migrate:member-content -- --code=my-community-code
 ```
 
 ## Hosting (Production)
+0. Run security checks:
+   ```
+   npm run security:check
+   ```
 1. Run `npm run build`.
 2. Run `firebase init hosting`.
 3. Deploy with `firebase deploy`.

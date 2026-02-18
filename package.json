@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "audit:firebase": "node scripts/audit-firestore.mjs",
+    "security:check": "node scripts/security-check.mjs",
     "migrate:member-content": "node scripts/migrate-member-content.mjs",
     "seed:firebase": "node scripts/seed-firestore.mjs"
   },

@@ -30,6 +30,11 @@ import {
   getFirebaseAuth,
   getFirebaseDb,
 } from "../firebase";
+import {
+  checkRateLimit,
+  formatRetryAfter,
+  recordRateLimitEvent,
+} from "../../security/rateLimit";
 import type {
   AddAdminResult,
   CreateCommunityResult,
@@ -70,6 +75,10 @@ const ensureAuthToken = async () => {
 
 const memberContentRefFor = (communityCode: string) =>
   doc(getFirebaseDb(), "communities", communityCode, "private", "memberContent");
+
+const AUTH_WINDOW_MS = 10 * 60 * 1000;
+const CREATE_COMMUNITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const REQUEST_MEMBERSHIP_WINDOW_MS = 60 * 60 * 1000;
 
 export const createFirebaseClient = (): DataClient => ({
   kind: "firebase",
@@ -193,6 +202,14 @@ export const createFirebaseClient = (): DataClient => ({
     const email = normalizeEmail(input.email);
     if (!email) return { error: "Email is required." };
     if (!input.password) return { error: "Password is required." };
+    const signInRateKey = `auth:${input.mode}:${email}`;
+    const signInRate = checkRateLimit(signInRateKey, 10, AUTH_WINDOW_MS);
+    if (signInRate.blocked) {
+      return {
+        error: `Too many auth attempts. Try again in ${formatRetryAfter(signInRate.retryAfterMs)}.`,
+      };
+    }
+    recordRateLimitEvent(signInRateKey, AUTH_WINDOW_MS);
 
     const auth = getFirebaseAuth();
     try {
@@ -217,6 +234,14 @@ export const createFirebaseClient = (): DataClient => ({
     const code = normalizeCode(input.code);
     if (!code) return { error: "Block code is required." };
     if (!input.currentUserId) return { error: "User not signed in." };
+    const createRateKey = `create-community:${input.currentUserId}`;
+    const createRate = checkRateLimit(createRateKey, 3, CREATE_COMMUNITY_WINDOW_MS);
+    if (createRate.blocked) {
+      return {
+        error: `Too many block creation attempts. Try again in ${formatRetryAfter(createRate.retryAfterMs)}.`,
+      };
+    }
+    recordRateLimitEvent(createRateKey, CREATE_COMMUNITY_WINDOW_MS);
 
     await ensureAuthToken();
     const db = getFirebaseDb();
@@ -475,6 +500,19 @@ export const createFirebaseClient = (): DataClient => ({
     const key = normalizeCode(code);
     if (!key) return { ok: false, error: "Community code is required." };
     if (!currentUserId) return { ok: false, error: "User not signed in." };
+    const membershipRateKey = `request-membership:${currentUserId}:${key}`;
+    const membershipRate = checkRateLimit(
+      membershipRateKey,
+      5,
+      REQUEST_MEMBERSHIP_WINDOW_MS
+    );
+    if (membershipRate.blocked) {
+      return {
+        ok: false,
+        error: `Too many membership requests. Try again in ${formatRetryAfter(membershipRate.retryAfterMs)}.`,
+      };
+    }
+    recordRateLimitEvent(membershipRateKey, REQUEST_MEMBERSHIP_WINDOW_MS);
 
     await ensureAuthToken();
     const db = getFirebaseDb();
@@ -507,6 +545,12 @@ export const createFirebaseClient = (): DataClient => ({
           ok: false,
           error:
             "You already have an active membership for this block. Ask an admin to resync your account.",
+        };
+      }
+      if (existing.status === "pending") {
+        return {
+          ok: false,
+          error: "Your request is already pending review.",
         };
       }
     } else {
