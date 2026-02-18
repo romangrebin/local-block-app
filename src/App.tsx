@@ -16,14 +16,17 @@ import { NotFound } from "./pages/NotFound";
 import { AuthModal } from "./components/AuthModal";
 import { CreateCommunityModal } from "./components/CreateCommunityModal";
 import { ConfirmModal } from "./components/ConfirmModal";
+import { AccountSettingsModal } from "./components/AccountSettingsModal";
 
 const Header: React.FC<{
   onOpenAuth: () => void;
   onOpenCreate: () => void;
   onOpenSignOut: () => void;
-}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
+  onOpenAccount: () => void;
+}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut, onOpenAccount }) => {
   const {
     signedIn,
+    emailVerified,
     adminCommunityCode,
     memberCommunityCode,
     pendingCommunityCode,
@@ -64,6 +67,11 @@ const Header: React.FC<{
           </button>
         ) : null}
         {signedIn ? (
+          <button className="button ghost" onClick={onOpenAccount}>
+            {emailVerified ? "Account" : "Verify email"}
+          </button>
+        ) : null}
+        {signedIn ? (
           <button className="button" onClick={onOpenSignOut}>
             Sign out
           </button>
@@ -81,7 +89,8 @@ const AppFrame: React.FC<{
   onOpenAuth: () => void;
   onOpenCreate: () => void;
   onOpenSignOut: () => void;
-}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut }) => {
+  onOpenAccount: () => void;
+}> = ({ onOpenAuth, onOpenCreate, onOpenSignOut, onOpenAccount }) => {
   const location = useLocation();
   const { signedIn } = useAppState();
   const isPublic = location.pathname === "/";
@@ -103,6 +112,7 @@ const AppFrame: React.FC<{
         onOpenAuth={onOpenAuth}
         onOpenCreate={onOpenCreate}
         onOpenSignOut={onOpenSignOut}
+        onOpenAccount={onOpenAccount}
       />
       <main className={`main-shell ${isPublic ? "main-public" : "main-community"}`}>
         <Routes>
@@ -145,6 +155,7 @@ const AppFrame: React.FC<{
 const AppShell: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const { signOut } = useAppState();
 
@@ -154,9 +165,11 @@ const AppShell: React.FC = () => {
         onOpenAuth={() => setShowAuth(true)}
         onOpenCreate={() => setShowCreate(true)}
         onOpenSignOut={() => setShowSignOutConfirm(true)}
+        onOpenAccount={() => setShowAccount(true)}
       />
       <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
       <CreateCommunityModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
+      <AccountSettingsModal isOpen={showAccount} onClose={() => setShowAccount(false)} />
       <ConfirmModal
         isOpen={showSignOutConfirm}
         title="Sign out?"

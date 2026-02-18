@@ -16,6 +16,8 @@ import { createFirebaseClient } from "../data/client";
 
 type AppState = {
   signedIn: boolean;
+  userEmail: string;
+  emailVerified: boolean;
   userName: string;
   adminCommunityCode: string | null;
   memberCommunityCode: string | null;
@@ -25,6 +27,10 @@ type AppState = {
   isCommunityLoaded: (code: string) => boolean;
   signIn: (input: SignInInput) => Promise<string | null>;
   signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<string | null>;
+  sendVerificationEmail: () => Promise<string | null>;
+  refreshAuthStatus: () => Promise<void>;
+  updatePassword: (currentPassword: string, nextPassword: string) => Promise<string | null>;
   createCommunity: (
     input: CreateCommunityInput
   ) => Promise<{ code?: string; error?: string }>;
@@ -42,6 +48,7 @@ type AppState = {
   getCommunity: (code: string) => Community | null;
   getMembershipFor: (code: string) => CommunityMember | null;
   requestMembership: (code: string) => Promise<string | null>;
+  leaveCommunity: (code: string) => Promise<string | null>;
   approveMembership: (code: string, userId: string) => Promise<string | null>;
   denyMembership: (code: string, userId: string) => Promise<string | null>;
   isMemberFor: (code: string) => boolean;
@@ -61,6 +68,8 @@ type CommunityStatus = "idle" | "loading" | "loaded" | "missing";
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [store, setStore] = useState<StoreData>(emptyStore);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
   const [communityStatus, setCommunityStatus] = useState<Record<string, CommunityStatus>>({});
   const [adminContacts, setAdminContacts] = useState<Record<string, string>>({});
   const [memberContentByCommunity, setMemberContentByCommunity] = useState<
@@ -71,7 +80,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const communities = store.communities;
   const communityMembers = store.communityMembers;
   const signedIn = Boolean(currentUserId);
-  const userName = currentUser?.email ? nameFromEmail(currentUser.email) : "Neighbor";
+  const nameSource = userEmail || currentUser?.email || "";
+  const userName = nameSource ? nameFromEmail(nameSource) : "Neighbor";
   const memberCommunityCode = currentUser?.memberCommunityCode ?? null;
   const pendingCommunityCode = currentUser?.pendingCommunityCode ?? null;
   const adminCommunityCode = useMemo(() => {
@@ -102,8 +112,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     dataClient.connect();
     if (!dataClient.onAuthStateChanged) return;
-    const unsubscribe = dataClient.onAuthStateChanged((userId) => {
-      setCurrentUserId(userId);
+    const unsubscribe = dataClient.onAuthStateChanged((authUser) => {
+      setCurrentUserId(authUser?.userId ?? null);
+      setUserEmail(authUser?.email ?? "");
+      setEmailVerified(authUser?.emailVerified ?? false);
     });
     return () => {
       if (unsubscribe) unsubscribe();
@@ -297,8 +309,33 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await dataClient.signOut();
   };
 
+  const requestPasswordReset = async (email: string) => {
+    const result = await dataClient.requestPasswordReset(email);
+    return result.ok ? null : result.error ?? "Unable to send password reset.";
+  };
+
+  const sendVerificationEmail = async () => {
+    const result = await dataClient.sendVerificationEmail();
+    return result.ok ? null : result.error ?? "Unable to send verification email.";
+  };
+
+  const refreshAuthStatus = async () => {
+    const authUser = await dataClient.refreshAuthUser();
+    setCurrentUserId(authUser?.userId ?? null);
+    setUserEmail(authUser?.email ?? "");
+    setEmailVerified(authUser?.emailVerified ?? false);
+  };
+
+  const updatePassword = async (currentPassword: string, nextPassword: string) => {
+    const result = await dataClient.updatePassword(currentPassword, nextPassword);
+    return result.ok ? null : result.error ?? "Unable to update password.";
+  };
+
   const createCommunity = async (input: CreateCommunityInput) => {
     if (!currentUserId) return { error: "User not signed in." };
+    if (!emailVerified) {
+      return { error: "Verify your email from Account settings before creating a block." };
+    }
     if (memberCommunityCode || pendingCommunityCode) {
       return { error: "You already belong to a block." };
     }
@@ -310,18 +347,24 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateCommunity = async (code: string, patch: Partial<Community>) => {
+    if (!emailVerified) return;
     await dataClient.updateCommunity(code, patch);
   };
 
   const updateMemberContent = async (code: string, content: string) => {
+    if (!emailVerified) return;
     await dataClient.updateCommunityMemberContent(code, content);
   };
 
   const deleteCommunity = async (code: string) => {
+    if (!emailVerified) return;
     await dataClient.deleteCommunity(code, currentUserId ?? undefined);
   };
 
   const addAdmin = async (code: string, admin: string) => {
+    if (!emailVerified) {
+      return "Verify your email from Account settings before adding admins.";
+    }
     const result = await dataClient.addAdmin(code, admin);
     return result.ok ? null : result.error ?? "Unable to add admin.";
   };
@@ -419,16 +462,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const requestMembership = async (code: string) => {
     if (!currentUserId) return "User not signed in.";
+    if (!emailVerified) {
+      return "Verify your email from Account settings before requesting membership.";
+    }
     const result = await dataClient.requestMembership(code, currentUserId);
     return result.ok ? null : result.error ?? "Unable to request membership.";
   };
 
+  const leaveCommunity = async (code: string) => {
+    if (!currentUserId) return "User not signed in.";
+    if (!emailVerified) {
+      return "Verify your email from Account settings before leaving a block.";
+    }
+    const result = await dataClient.leaveCommunity(code, currentUserId);
+    return result.ok ? null : result.error ?? "Unable to leave the block.";
+  };
+
   const approveMembership = async (code: string, userId: string) => {
+    if (!emailVerified) {
+      return "Verify your email from Account settings before managing memberships.";
+    }
     const result = await dataClient.approveMembership(code, userId);
     return result.ok ? null : result.error ?? "Unable to approve member.";
   };
 
   const denyMembership = async (code: string, userId: string) => {
+    if (!emailVerified) {
+      return "Verify your email from Account settings before managing memberships.";
+    }
     const result = await dataClient.denyMembership(code, userId);
     return result.ok ? null : result.error ?? "Unable to deny member.";
   };
@@ -449,6 +510,8 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <AppStateContext.Provider
       value={{
         signedIn,
+        userEmail,
+        emailVerified,
         userName,
         adminCommunityCode,
         memberCommunityCode,
@@ -458,6 +521,10 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isCommunityLoaded,
         signIn,
         signOut,
+        requestPasswordReset,
+        sendVerificationEmail,
+        refreshAuthStatus,
+        updatePassword,
         createCommunity,
         updateCommunity,
         updateMemberContent,
@@ -473,6 +540,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         getCommunity,
         getMembershipFor,
         requestMembership,
+        leaveCommunity,
         approveMembership,
         denyMembership,
         isMemberFor,

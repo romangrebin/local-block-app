@@ -1,6 +1,12 @@
 import type { Community, CommunityMember, User } from "../models";
 import type { CreateCommunityInput, SignInInput } from "../types";
 
+export type AuthUser = {
+  userId: string;
+  email: string;
+  emailVerified: boolean;
+};
+
 export type SignInResult = {
   error?: string;
   userId?: string;
@@ -24,7 +30,7 @@ export type MembershipResult = {
 export type DataClient = {
   kind: "firebase";
   connect: () => void;
-  onAuthStateChanged?: (callback: (userId: string | null) => void) => () => void;
+  onAuthStateChanged?: (callback: (authUser: AuthUser | null) => void) => () => void;
   subscribeUser?: (userId: string, callback: (user: User | null) => void) => () => void;
   subscribeCommunity: (
     code: string,
@@ -46,6 +52,13 @@ export type DataClient = {
   ) => () => void;
   signIn: (input: SignInInput) => Promise<SignInResult>;
   signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  sendVerificationEmail: () => Promise<{ ok: boolean; error?: string }>;
+  refreshAuthUser: () => Promise<AuthUser | null>;
+  updatePassword: (
+    currentPassword: string,
+    nextPassword: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   createCommunity: (
     input: CreateCommunityInput & { currentUserId: string }
   ) => Promise<CreateCommunityResult>;
@@ -54,6 +67,10 @@ export type DataClient = {
   deleteCommunity: (code: string, currentUserId?: string) => Promise<void>;
   addAdmin: (code: string, adminEmail: string) => Promise<AddAdminResult>;
   requestMembership: (
+    code: string,
+    currentUserId: string
+  ) => Promise<MembershipResult>;
+  leaveCommunity: (
     code: string,
     currentUserId: string
   ) => Promise<MembershipResult>;

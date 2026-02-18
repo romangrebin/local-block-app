@@ -5,6 +5,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function memberDoc(communityId, userId) {
       return get(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
     }
@@ -59,6 +63,15 @@ service cloud.firestore {
         && request.resource.data.pendingCommunityCode is string;
     }
 
+    function selfClearsCommunityMembership(userId) {
+      return request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(["memberCommunityCode", "pendingCommunityCode", "updatedAt"])
+        && resource.data.memberCommunityCode is string
+        && request.resource.data.memberCommunityCode == null
+        && request.resource.data.pendingCommunityCode == null;
+    }
+
     function hasValidCommunityKeys(data) {
       return data.keys().hasOnly([
         "code",
@@ -96,17 +109,20 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if isSignedIn()
+        && isVerifiedEmail()
         && request.resource.data.code == communityId
         && request.resource.data.createdBy == request.auth.uid
         && userCommunityCode(request.auth.uid) == null
         && hasValidCommunityPayload(request.resource.data, communityId)
         && !request.resource.data.keys().hasAny(["memberContent"]);
       allow update: if isAdminFor(communityId)
+        && isVerifiedEmail()
         && request.resource.data.code == resource.data.code
         && request.resource.data.createdBy == resource.data.createdBy
         && hasValidCommunityPayload(request.resource.data, communityId)
         && !request.resource.data.diff(resource.data).changedKeys().hasAny(["memberContent"]);
-      allow delete: if isAdminFor(communityId);
+      allow delete: if isAdminFor(communityId)
+        && isVerifiedEmail();
 
       match /private/{docId} {
         allow get: if docId == "memberContent"
@@ -114,9 +130,11 @@ service cloud.firestore {
         allow list: if false;
         allow create, update: if docId == "memberContent"
           && isAdminFor(communityId)
+          && isVerifiedEmail()
           && hasValidPrivateMemberContentPayload(request.resource.data);
         allow delete: if docId == "memberContent"
-          && isAdminFor(communityId);
+          && isAdminFor(communityId)
+          && isVerifiedEmail();
       }
 
       match /members/{userId} {
@@ -131,6 +149,7 @@ service cloud.firestore {
         );
         allow list: if isAdminFor(communityId);
         allow create: if isSignedIn()
+          && isVerifiedEmail()
           && request.resource.data.userId == userId
           && request.resource.data.communityCode == communityId
           && exists(/databases/$(database)/documents/communities/$(communityId))
@@ -154,10 +173,13 @@ service cloud.firestore {
             || request.resource.data.status == "active"
           );
         allow update: if isAdminFor(communityId)
+          && isVerifiedEmail()
           && request.resource.data.userId == userId
           && request.resource.data.communityCode == communityId
           && request.resource.data.email == resource.data.email;
-        allow delete: if isSignedIn() && (
+        allow delete: if isSignedIn()
+          && isVerifiedEmail()
+          && (
           request.auth.uid == userId
           || isAdminFor(communityId)
         );
@@ -169,8 +191,10 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.auth.uid == userId;
       allow update: if isSignedIn()
+        && isVerifiedEmail()
         && (
           selfSetsPendingCommunity(userId)
+          || selfClearsCommunityMembership(userId)
           || (
             adminUpdatesMemberCode()
             && (

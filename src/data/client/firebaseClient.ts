@@ -9,13 +9,19 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import {
+  EmailAuthProvider,
   createUserWithEmailAndPassword,
   onAuthStateChanged as onFirebaseAuthStateChanged,
+  reauthenticateWithCredential,
+  sendEmailVerification as sendFirebaseEmailVerification,
+  sendPasswordResetEmail as sendFirebasePasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updatePassword as updateFirebasePassword,
 } from "firebase/auth";
 import type { Community, CommunityMember, User } from "../models";
 import type { CreateCommunityInput, SignInInput } from "../types";
@@ -37,6 +43,7 @@ import {
 } from "../../security/rateLimit";
 import type {
   AddAdminResult,
+  AuthUser,
   CreateCommunityResult,
   DataClient,
   MembershipResult,
@@ -63,6 +70,17 @@ const getAuthEmail = () => {
   return auth.currentUser?.email ?? "";
 };
 
+const getAuthUserSnapshot = (): AuthUser | null => {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) return null;
+  return {
+    userId: user.uid,
+    email: user.email ?? "",
+    emailVerified: user.emailVerified,
+  };
+};
+
 const ensureAuthToken = async () => {
   const auth = getFirebaseAuth();
   if (!auth.currentUser) return;
@@ -76,6 +94,18 @@ const ensureAuthToken = async () => {
 const memberContentRefFor = (communityCode: string) =>
   doc(getFirebaseDb(), "communities", communityCode, "private", "memberContent");
 
+const getAuthActionSettings = () => {
+  const configuredUrl = import.meta.env.VITE_FIREBASE_AUTH_ACTION_URL?.trim();
+  const url =
+    configuredUrl ||
+    (typeof window !== "undefined" ? `${window.location.origin}/` : "");
+  if (!url) return undefined;
+  return {
+    url,
+    handleCodeInApp: false,
+  };
+};
+
 const AUTH_WINDOW_MS = 10 * 60 * 1000;
 const CREATE_COMMUNITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REQUEST_MEMBERSHIP_WINDOW_MS = 60 * 60 * 1000;
@@ -88,7 +118,15 @@ export const createFirebaseClient = (): DataClient => ({
   onAuthStateChanged: (callback) => {
     const auth = getFirebaseAuth();
     return onFirebaseAuthStateChanged(auth, (user) => {
-      callback(user ? user.uid : null);
+      callback(
+        user
+          ? {
+              userId: user.uid,
+              email: user.email ?? "",
+              emailVerified: user.emailVerified,
+            }
+          : null
+      );
     });
   },
   subscribeUser: (userId, callback) => {
@@ -216,6 +254,11 @@ export const createFirebaseClient = (): DataClient => ({
       if (input.mode === "signup") {
         const result = await createUserWithEmailAndPassword(auth, email, input.password);
         await ensureUserDoc(result.user.uid, email);
+        try {
+          await sendFirebaseEmailVerification(result.user, getAuthActionSettings());
+        } catch {
+          // Verification email can be retried later from account settings.
+        }
       } else {
         const result = await signInWithEmailAndPassword(auth, email, input.password);
         await ensureUserDoc(result.user.uid, email);
@@ -227,6 +270,63 @@ export const createFirebaseClient = (): DataClient => ({
   },
   signOut: async () => {
     await firebaseSignOut(getFirebaseAuth());
+  },
+  requestPasswordReset: async (rawEmail) => {
+    const auth = getFirebaseAuth();
+    const email = normalizeEmail(rawEmail);
+    if (!email) {
+      return { ok: false, error: "Enter a valid email first." };
+    }
+    try {
+      await sendFirebasePasswordResetEmail(auth, email, getAuthActionSettings());
+      return { ok: true };
+    } catch (error) {
+      const code = (error as { code?: string })?.code ?? "";
+      if (code.includes("invalid-email")) {
+        return { ok: false, error: "Enter a valid email first." };
+      }
+      // Keep response generic to avoid account enumeration.
+      return { ok: true };
+    }
+  },
+  sendVerificationEmail: async () => {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) return { ok: false, error: "User not signed in." };
+    try {
+      await sendFirebaseEmailVerification(user, getAuthActionSettings());
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "Unable to send verification email right now." };
+    }
+  },
+  refreshAuthUser: async () => {
+    const auth = getFirebaseAuth();
+    if (!auth.currentUser) return null;
+    try {
+      await auth.currentUser.reload();
+    } catch {
+      // Ignore reload failures and return current snapshot.
+    }
+    return getAuthUserSnapshot();
+  },
+  updatePassword: async (currentPassword, nextPassword) => {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) return { ok: false, error: "User not signed in." };
+    const email = user.email ?? "";
+    if (!email) return { ok: false, error: "User email missing." };
+    if (!currentPassword || !nextPassword) {
+      return { ok: false, error: "Both current and new passwords are required." };
+    }
+    try {
+      const credential = EmailAuthProvider.credential(email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updateFirebasePassword(user, nextPassword);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "Unable to update password. Check your current password." };
+    }
   },
   createCommunity: async (
     input: CreateCommunityInput & { currentUserId: string }
@@ -596,6 +696,48 @@ export const createFirebaseClient = (): DataClient => ({
     }
 
     return { ok: true };
+  },
+  leaveCommunity: async (
+    code: string,
+    currentUserId: string
+  ): Promise<MembershipResult> => {
+    const key = normalizeCode(code);
+    if (!key) return { ok: false, error: "Community code is required." };
+    if (!currentUserId) return { ok: false, error: "User not signed in." };
+
+    await ensureAuthToken();
+    const db = getFirebaseDb();
+    const memberRef = doc(db, "communities", key, "members", currentUserId);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) {
+      return { ok: false, error: "Membership not found." };
+    }
+
+    const userRef = doc(db, "users", currentUserId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) {
+      return { ok: false, error: "User not found." };
+    }
+
+    const batch = writeBatch(db);
+    batch.delete(memberRef);
+    batch.update(userRef, {
+      memberCommunityCode: null,
+      pendingCommunityCode: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    try {
+      await batch.commit();
+      return { ok: true };
+    } catch (error) {
+      console.error("Failed to leave community", {
+        error,
+        communityCode: key,
+        userId: currentUserId,
+      });
+      return { ok: false, error: "Unable to leave the block right now." };
+    }
   },
   approveMembership: async (
     code: string,

@@ -9,11 +9,12 @@ type AuthModalProps = {
 };
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { signIn } = useAppState();
+  const { signIn, requestPasswordReset } = useAppState();
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       setEmail("");
       setPassword("");
       setError("");
+      setInfo("");
       setSubmitting(false);
     }
   }, [isOpen]);
@@ -30,6 +32,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setInfo("");
     const message = await signIn({ email, password, mode });
     if (message) {
       setError(message);
@@ -37,6 +40,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       return;
     }
     onClose();
+  };
+
+  const handleForgotPassword = async () => {
+    if (submitting) return;
+    setError("");
+    setInfo("");
+    setSubmitting(true);
+    const message = await requestPasswordReset(email);
+    if (message) {
+      setError(message);
+      setSubmitting(false);
+      return;
+    }
+    setInfo("If an account exists for this email, a reset link has been sent.");
+    setSubmitting(false);
   };
 
   return (
@@ -90,7 +108,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             required
           />
         </label>
+        {mode === "signin" ? (
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="button ghost"
+              onClick={handleForgotPassword}
+              disabled={submitting}
+            >
+              Forgot password?
+            </button>
+          </div>
+        ) : null}
         {error ? <p className="helper-text error-text">{error}</p> : null}
+        {info ? <p className="helper-text">{info}</p> : null}
         <p className="helper-text">
           {mode === "signin"
             ? "Sign in with your email and password."

@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { useAppState } from "../state/AppState";
 import { toCommunitySlug } from "../data/normalize";
 import { CommunityHeader } from "../components/CommunityHeader";
+import { ConfirmModal } from "../components/ConfirmModal";
 
 type CommunityPageProps = {
   onOpenCreate: () => void;
@@ -31,6 +32,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     subscribeAdminContact,
     getMembershipFor,
     requestMembership,
+    leaveCommunity,
     isMemberFor,
     isAdminFor,
     subscribeCommunity,
@@ -47,6 +49,10 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
   const adminContactEmail = getAdminContactEmail(communityCode);
   const [requestError, setRequestError] = useState("");
   const [requesting, setRequesting] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [showLeaveSuccess, setShowLeaveSuccess] = useState(false);
 
   useEffect(() => {
     return subscribeCommunity(communityCode);
@@ -69,6 +75,8 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
     if (requesting) return;
     setRequesting(true);
     setRequestError("");
+    setLeaveError("");
+    setShowLeaveSuccess(false);
     const error = await requestMembership(communityCode);
     if (error) {
       setRequestError(error);
@@ -76,6 +84,21 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
       return;
     }
     setRequesting(false);
+  };
+
+  const handleLeaveCommunity = async () => {
+    if (leaving) return;
+    setLeaving(true);
+    setLeaveError("");
+    const error = await leaveCommunity(communityCode);
+    if (error) {
+      setLeaveError(error);
+      setLeaving(false);
+      return;
+    }
+    setLeaving(false);
+    setShowLeaveConfirm(false);
+    setShowLeaveSuccess(true);
   };
 
   if (!community && !communityLoaded) {
@@ -160,7 +183,21 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                 directory.
               </p>
             ) : isMember ? (
-              <p className="helper-text">You are a verified member of this block.</p>
+              <>
+                <p className="helper-text">You are a verified member of this block.</p>
+                <div className="inline-actions">
+                  <button
+                    className="button ghost"
+                    onClick={() => {
+                      setLeaveError("");
+                      setShowLeaveConfirm(true);
+                    }}
+                    disabled={leaving}
+                  >
+                    Leave community
+                  </button>
+                </div>
+              </>
             ) : isPending ? (
               <p className="helper-text">Request sent. An admin will review it soon.</p>
             ) : memberCommunityCode && memberCommunityCode !== communityCode ? (
@@ -188,6 +225,10 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
             </button>
           )}
           {requestError ? <p className="helper-text error-text">{requestError}</p> : null}
+          {leaveError ? <p className="helper-text error-text">{leaveError}</p> : null}
+          {showLeaveSuccess ? (
+            <p className="helper-text">You left this block.</p>
+          ) : null}
           {signedIn && (isMember || isAdmin) && adminContactEmail ? (
             <p className="helper-text">
               Contact admin: <a href={`mailto:${adminContactEmail}`}>{adminContactEmail}</a>
@@ -200,6 +241,19 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
           </p>
         </aside>
       </div>
+      <ConfirmModal
+        isOpen={showLeaveConfirm}
+        title="Leave this block?"
+        description="You'll lose access to member-only updates. You can request access again later."
+        confirmLabel={leaving ? "Leaving..." : "Leave block"}
+        destructive
+        confirmDisabled={leaving}
+        onCancel={() => {
+          if (leaving) return;
+          setShowLeaveConfirm(false);
+        }}
+        onConfirm={handleLeaveCommunity}
+      />
     </div>
   );
 };
