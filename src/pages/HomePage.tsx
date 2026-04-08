@@ -120,9 +120,63 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
             <p className="helper-text">
               Codes are shared neighbor-to-neighbor and are not listed or searchable. Ask a neighbor for your block's code, or sign in to create a community.
             </p>
+            <p className="helper-text">
+              <a className="home-about-link" href="#about">Don't have a code, but you're curious?</a>
+            </p>
             {cta ? <div className="cta-row">{cta}</div> : null}
           </div>
         </div>
+      </section>
+
+      <section className="home-explainer" id="about">
+        <div className="home-explainer-inner">
+          <div className="home-explainer-block">
+            <h2>What is Our Block?</h2>
+            <p>
+              Realistically: it was a fun, exploratory side project that likely isn't going to
+              see additional attention. But it is a feature-complete MVP, and everything works!
+              Database, auth, reCAPTCHA v3, emails, ability to update passwords, update community
+              content, manage community members, the whole shebang.
+              If it were looking for users, the pitch would look something like: ... 
+            </p>
+            <p>Every app for local community is broken. Nextdoor optimizes for paranoia,
+              complaints, and ads. Facebook groups can be chaotic noise. Meanwhile, the people
+              who show up when something happens in your neighborhood are the ones who already
+              knew each other. Our Block is a low-friction way to become those people — without
+              replacing in-person connection with another feed.
+            </p>
+            <p>
+              When someone new moves to a block — or an existing resident wants to get more
+              involved — there's often no clear entry point. Who runs the group text? When is
+              the next potluck? Is there a tool library? That information lives in people's
+              heads and scattered across platforms.
+            </p>
+            <p>
+              Our Block is a semi-private front door for your neighborhood: a simple page where an
+              organizer can collect links, post events, and share contact info. No ads, no feed,
+              no optimizing for your attention. Just a place for neighbors to find each other.
+            </p>
+            <Link className="home-try-it" to="/zesty-test">
+              Try it: view an example community &rarr;
+            </Link>
+          </div>
+          <div className="home-explainer-block">
+            <h2>How it works</h2>
+            <ol className="home-how-list">
+              <li><strong>Get a code</strong> from a neighbor or community organizer.</li>
+              <li><strong>Open your block page</strong> to see resources, events, and how to connect.</li>
+              <li><strong>Sign in to create a community</strong> if you want to set one up for your block.</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-collab">
+        <p>
+          Interested in discussing neighborhood tech, mutual aid, or collaborating on
+          pro-social tech? Reach out:{" "}
+          <span className="home-email">roman.b.grebin [at] gmail.com</span>
+        </p>
       </section>
     </div>
   );
