@@ -123,7 +123,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
             <p className="helper-text">
               <a className="home-about-link" href="#about">Don't have a code, but you're curious?</a>
             </p>
-            {cta ? <div className="cta-row">{cta}</div> : null}
+            <div className="cta-row">
+              <a className="button ghost" href="#about">
+                About Our Block
+              </a>
+              {cta}
+            </div>
           </div>
         </div>
       </section>
@@ -176,6 +181,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
           Interested in discussing neighborhood tech, mutual aid, or collaborating on
           pro-social tech? Reach out:{" "}
           <span className="home-email">roman.b.grebin [at] gmail.com</span>
+        </p>
+        <p>
+          Source code:{" "}
+          <a
+            className="home-github-link"
+            href="https://github.com/romangrebin/local-block-app"
+            target="_blank"
+            rel="noreferrer"
+          >
+            github.com/romangrebin/local-block-app
+          </a>
         </p>
       </section>
     </div>

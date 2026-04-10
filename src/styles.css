@@ -1,5 +1,15 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap");
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 :root {
   color-scheme: light;
   --bg-1: #f6efe4;
@@ -378,6 +388,16 @@ code {
   color: var(--ink);
 }
 
+.home-github-link {
+  font-family: monospace;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.home-github-link:hover {
+  text-decoration: underline;
+}
+
 .home-primary-cta {
   display: flex;
   align-items: center;
@@ -431,12 +451,19 @@ textarea:focus {
 }
 
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 999px;
   padding: 12px 20px;
   background: var(--accent);
   color: #ffffff;
+  font-family: inherit;
+  font-size: 1rem;
   font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 12px 20px rgba(15, 118, 110, 0.2);
