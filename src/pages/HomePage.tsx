@@ -144,23 +144,27 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
               content, manage community members, the whole shebang.
               If it were looking for users, the pitch would look something like: ... 
             </p>
-            <p>Every app for local community is broken. Nextdoor optimizes for paranoia,
+            <p><i>Every app for local community is broken. Nextdoor optimizes for paranoia,
               complaints, and ads. Facebook groups can be chaotic noise. Meanwhile, the people
               who show up when something happens in your neighborhood are the ones who already
-              knew each other. Our Block is a low-friction way to become those people — without
+              knew each other. Our Block is a low-friction way to become those people, without
               replacing in-person connection with another feed.
-            </p>
-            <p>
-              When someone new moves to a block — or an existing resident wants to get more
-              involved — there's often no clear entry point. Who runs the group text? When is
-              the next potluck? Is there a tool library? That information lives in people's
-              heads and scattered across platforms.
-            </p>
-            <p>
-              Our Block is a semi-private front door for your neighborhood: a simple page where an
+            </i></p>
+            <p><i>
+              When someone new moves to a block, or an existing resident wants to get more
+              involved, there's often no clear entry point.
+              <ul>
+                <li>How do I join the group text?</li>
+                <li>When is the next potluck?</li>
+                <li>Is there a tool library?</li>
+              </ul>
+              That information lives in people's heads and scattered across platforms.
+            </i></p>
+            <p><i>
+              Our Block is a <i>semi</i>-private front door for your neighborhood: a simple page where an
               organizer can collect links, post events, and share contact info. No ads, no feed,
               no optimizing for your attention. Just a place for neighbors to find each other.
-            </p>
+            </i></p>
             <Link className="home-try-it" to="/zesty-test">
               Try it: view an example community &rarr;
             </Link>
@@ -192,6 +196,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenCreate }) 
           >
             github.com/romangrebin/local-block-app
           </a>
+        </p>
+        <p>
+          For a raw look at the thought process that led to this app, see this{" "} 
+          <a className="home-google-doc-link"
+            href="https://docs.google.com/document/d/1D77BOXlFiQ1nTf6EDPLFoo3H7Y0to2NpoNSyYWK6KJQ/edit?tab=t.33tcodttxaww"
+            target="_blank"
+            rel="noreferrer"
+          >
+             Google Doc where I brainstormed this app (and other ideas)</a>.
         </p>
       </section>
     </div>
