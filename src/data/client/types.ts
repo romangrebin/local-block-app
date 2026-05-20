@@ -52,13 +52,8 @@ export type DataClient = {
   ) => () => void;
   signIn: (input: SignInInput) => Promise<SignInResult>;
   signOut: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
-  sendVerificationEmail: () => Promise<{ ok: boolean; error?: string }>;
+  completeSignInFromLink: () => Promise<{ handled: boolean; error?: string }>;
   refreshAuthUser: () => Promise<AuthUser | null>;
-  updatePassword: (
-    currentPassword: string,
-    nextPassword: string
-  ) => Promise<{ ok: boolean; error?: string }>;
   createCommunity: (
     input: CreateCommunityInput & { currentUserId: string }
   ) => Promise<CreateCommunityResult>;

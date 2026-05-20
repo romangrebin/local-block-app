@@ -13,15 +13,11 @@ import {
   where,
 } from "firebase/firestore";
 import {
-  EmailAuthProvider,
-  createUserWithEmailAndPassword,
+  isSignInWithEmailLink,
   onAuthStateChanged as onFirebaseAuthStateChanged,
-  reauthenticateWithCredential,
-  sendEmailVerification as sendFirebaseEmailVerification,
-  sendPasswordResetEmail as sendFirebasePasswordResetEmail,
-  signInWithEmailAndPassword,
+  sendSignInLinkToEmail,
+  signInWithEmailLink,
   signOut as firebaseSignOut,
-  updatePassword as updateFirebasePassword,
 } from "firebase/auth";
 import type { Community, CommunityMember, User } from "../models";
 import type { CreateCommunityInput, SignInInput } from "../types";
@@ -94,17 +90,23 @@ const ensureAuthToken = async () => {
 const memberContentRefFor = (communityCode: string) =>
   doc(getFirebaseDb(), "communities", communityCode, "private", "memberContent");
 
-const getAuthActionSettings = () => {
+const getSignInLinkSettings = () => {
   const configuredUrl = import.meta.env.VITE_FIREBASE_AUTH_ACTION_URL?.trim();
   const url =
     configuredUrl ||
     (typeof window !== "undefined" ? `${window.location.origin}/` : "");
-  if (!url) return undefined;
+  if (!url) {
+    throw new Error("Auth action URL is not configured.");
+  }
   return {
     url,
-    handleCodeInApp: false,
+    handleCodeInApp: true,
   };
 };
+
+const EMAIL_FOR_SIGN_IN_KEY = "localblock:emailForSignIn";
+
+let signInLinkCompletion: Promise<{ handled: boolean; error?: string }> | null = null;
 
 const AUTH_WINDOW_MS = 10 * 60 * 1000;
 const CREATE_COMMUNITY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -238,67 +240,72 @@ export const createFirebaseClient = (): DataClient => ({
   },
   signIn: async (input: SignInInput): Promise<SignInResult> => {
     const email = normalizeEmail(input.email);
-    if (!email) return { error: "Email is required." };
-    if (!input.password) return { error: "Password is required." };
-    const signInRateKey = `auth:${input.mode}:${email}`;
+    if (!email) return { error: "Enter a valid email." };
+    const signInRateKey = `auth:link:${email}`;
     const signInRate = checkRateLimit(signInRateKey, 10, AUTH_WINDOW_MS);
     if (signInRate.blocked) {
       return {
-        error: `Too many auth attempts. Try again in ${formatRetryAfter(signInRate.retryAfterMs)}.`,
+        error: `Too many sign-in attempts. Try again in ${formatRetryAfter(signInRate.retryAfterMs)}.`,
       };
     }
     recordRateLimitEvent(signInRateKey, AUTH_WINDOW_MS);
 
     const auth = getFirebaseAuth();
     try {
-      if (input.mode === "signup") {
-        const result = await createUserWithEmailAndPassword(auth, email, input.password);
-        await ensureUserDoc(result.user.uid, email);
-        try {
-          await sendFirebaseEmailVerification(result.user, getAuthActionSettings());
-        } catch {
-          // Verification email can be retried later from account settings.
-        }
-      } else {
-        const result = await signInWithEmailAndPassword(auth, email, input.password);
-        await ensureUserDoc(result.user.uid, email);
+      await sendSignInLinkToEmail(auth, email, getSignInLinkSettings());
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, email);
       }
       return {};
-    } catch {
-      return { error: "Unable to sign in. Double-check your credentials." };
-    }
-  },
-  signOut: async () => {
-    await firebaseSignOut(getFirebaseAuth());
-  },
-  requestPasswordReset: async (rawEmail) => {
-    const auth = getFirebaseAuth();
-    const email = normalizeEmail(rawEmail);
-    if (!email) {
-      return { ok: false, error: "Enter a valid email first." };
-    }
-    try {
-      await sendFirebasePasswordResetEmail(auth, email, getAuthActionSettings());
-      return { ok: true };
     } catch (error) {
       const code = (error as { code?: string })?.code ?? "";
       if (code.includes("invalid-email")) {
-        return { ok: false, error: "Enter a valid email first." };
+        return { error: "Enter a valid email." };
       }
-      // Keep response generic to avoid account enumeration.
-      return { ok: true };
+      // Keep generic to avoid account enumeration and noisy errors.
+      return {};
     }
   },
-  sendVerificationEmail: async () => {
+  completeSignInFromLink: async () => {
+    if (typeof window === "undefined") return { handled: false };
+    if (signInLinkCompletion) return signInLinkCompletion;
     const auth = getFirebaseAuth();
-    const user = auth.currentUser;
-    if (!user) return { ok: false, error: "User not signed in." };
-    try {
-      await sendFirebaseEmailVerification(user, getAuthActionSettings());
-      return { ok: true };
-    } catch {
-      return { ok: false, error: "Unable to send verification email right now." };
-    }
+    const href = window.location.href;
+    if (!isSignInWithEmailLink(auth, href)) return { handled: false };
+
+    signInLinkCompletion = (async () => {
+      let email = window.localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) ?? "";
+      if (!email) {
+        const prompted = window.prompt(
+          "Confirm the email you used to request this sign-in link:"
+        );
+        email = normalizeEmail(prompted ?? "");
+        if (!email) {
+          return { handled: true, error: "Email is required to finish signing in." };
+        }
+      }
+
+      try {
+        const result = await signInWithEmailLink(auth, email, href);
+        await ensureUserDoc(result.user.uid, result.user.email ?? email);
+        window.localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
+        const url = new URL(href);
+        url.search = "";
+        url.hash = "";
+        window.history.replaceState({}, document.title, url.toString());
+        return { handled: true };
+      } catch {
+        return {
+          handled: true,
+          error: "This sign-in link is invalid or expired. Request a new one.",
+        };
+      }
+    })();
+
+    return signInLinkCompletion;
+  },
+  signOut: async () => {
+    await firebaseSignOut(getFirebaseAuth());
   },
   refreshAuthUser: async () => {
     const auth = getFirebaseAuth();
@@ -309,24 +316,6 @@ export const createFirebaseClient = (): DataClient => ({
       // Ignore reload failures and return current snapshot.
     }
     return getAuthUserSnapshot();
-  },
-  updatePassword: async (currentPassword, nextPassword) => {
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser;
-    if (!user) return { ok: false, error: "User not signed in." };
-    const email = user.email ?? "";
-    if (!email) return { ok: false, error: "User email missing." };
-    if (!currentPassword || !nextPassword) {
-      return { ok: false, error: "Both current and new passwords are required." };
-    }
-    try {
-      const credential = EmailAuthProvider.credential(email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updateFirebasePassword(user, nextPassword);
-      return { ok: true };
-    } catch {
-      return { ok: false, error: "Unable to update password. Check your current password." };
-    }
   },
   createCommunity: async (
     input: CreateCommunityInput & { currentUserId: string }

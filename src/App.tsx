@@ -26,7 +26,6 @@ const Header: React.FC<{
 }> = ({ onOpenAuth, onOpenCreate, onOpenSignOut, onOpenAccount }) => {
   const {
     signedIn,
-    emailVerified,
     adminCommunityCode,
     memberCommunityCode,
     pendingCommunityCode,
@@ -68,7 +67,7 @@ const Header: React.FC<{
         ) : null}
         {signedIn ? (
           <button className="button ghost" onClick={onOpenAccount}>
-            {emailVerified ? "Account" : "Verify email"}
+            Account
           </button>
         ) : null}
         {signedIn ? (
@@ -157,7 +156,7 @@ const AppShell: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
-  const { signOut } = useAppState();
+  const { signOut, signInLinkError, dismissSignInLinkError } = useAppState();
 
   return (
     <BrowserRouter>
@@ -173,13 +172,24 @@ const AppShell: React.FC = () => {
       <ConfirmModal
         isOpen={showSignOutConfirm}
         title="Sign out?"
-        description="You can sign back in anytime with your email and password."
+        description="You can sign back in anytime by requesting a new sign-in link."
         confirmLabel="Sign out"
         destructive
         onCancel={() => setShowSignOutConfirm(false)}
         onConfirm={async () => {
           await signOut();
           setShowSignOutConfirm(false);
+        }}
+      />
+      <ConfirmModal
+        isOpen={Boolean(signInLinkError)}
+        title="Sign-in link problem"
+        description={signInLinkError ?? ""}
+        confirmLabel="OK"
+        onCancel={dismissSignInLinkError}
+        onConfirm={() => {
+          dismissSignInLinkError();
+          setShowAuth(true);
         }}
       />
     </BrowserRouter>
